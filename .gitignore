@@ -3,3 +3,4 @@
 data/aangan.db
 outbox/
 __pycache__/
+vercel-env.txt
