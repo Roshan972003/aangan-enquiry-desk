@@ -9,8 +9,7 @@ from app import agent, db, stats, config, gemini
 
 app = FastAPI(title="Aangan Enquiry Desk")
 
-# Password gate. Any username, password = APP_PASSWORD. Open for local dev when unset,
-# but on Vercel the site stays locked until APP_PASSWORD is set. Phone-provider webhooks and the health check stay open.
+# Optional password gate. Any username, password = APP_PASSWORD. Open when APP_PASSWORD is unset.
 OPEN_PATHS = ("/api/twilio/", "/api/health")
 
 @app.middleware("http")
@@ -19,8 +18,6 @@ async def password_gate(request, call_next):
     if request.url.path.startswith(OPEN_PATHS):
         return await call_next(request)
     if not pw:
-        if config.env("VERCEL"):
-            return Response("Locked: set APP_PASSWORD in the Vercel environment variables and redeploy.", status_code=503)
         return await call_next(request)
     import base64, secrets
     h = request.headers.get("authorization", "")
