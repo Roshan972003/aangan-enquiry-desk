@@ -1,0 +1,140 @@
+<title>Aangan Components Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Sora:wght@600;700&display=swap">
+<style>
+  /* Layout: the same format as a printed components map. A pastel poster; a dark header row (Actor, Trigger, Input, Context, Processing, AI, Output);
+     one tinted swim-lane per component; boxes in the column they fill; dashed arrows with small labels; pill legend. One light look by design.
+     At phone width the drawing is replaced by a numbered list. */
+  :root {
+    --bg: #E8EDF2; --ink: #1F2A37; --muted: #5E6B7B; --line: #C6CFDA; --head: #4A4F57; --headink: #FFFFFF; --arrow: #46505E;
+    --people: #DCEAFA; --people-b: #4F86C6; --people-band: rgba(120,170,230,.17);
+    --code: #FFF1C9;   --code-b: #D3A21C;   --code-band: rgba(240,200,90,.20);
+    --ai: #FBE0E7;     --ai-b: #D9708F;     --ai-band: rgba(235,140,170,.17);
+    --svc: #DDF3E5;    --svc-b: #4CAF7A;    --svc-band: rgba(110,200,150,.18);
+    --font-body: "Plus Jakarta Sans", system-ui, sans-serif; --font-head: "Sora", "Plus Jakarta Sans", system-ui, sans-serif;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--font-body); margin: 0; padding-inline: 16px; padding-block: 26px 40px; line-height: 1.4; }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  .poster { background: linear-gradient(180deg, #EAF2FB 0%, #EDF5EE 42%, #FBF3E1 72%, #FBEAF0 100%); border: 1px solid var(--line); border-radius: 18px; padding: 22px 22px 18px; }
+  h1 { font: 700 clamp(19px, 2.6vw, 26px)/1.2 var(--font-head); margin: 0; text-align: center; text-wrap: balance; }
+  .sub { color: var(--muted); margin: 5px 0 16px; font-size: 13px; text-align: center; }
+  .board { position: relative; padding-right: 46px; }
+  .grid { display: grid; grid-template-columns: 112px repeat(6, minmax(0, 1fr)); column-gap: 48px; position: relative; z-index: 1; }
+  .colhead { background: var(--head); color: var(--headink); font: 600 13px var(--font-body); text-align: center; padding: 10px 6px; margin-bottom: 3px; }
+  .colhead.first { border-radius: 4px 0 0 0; }
+  .colhead.last { border-radius: 0 4px 0 0; }
+  .lane { display: contents; }
+  .lname { background: var(--head); color: var(--headink); padding: 8px 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; margin-block: 2px; border-bottom: 2px solid #fff; }
+  .lname b { font: 600 13px var(--font-body); }
+  .lname span { font-size: 10px; opacity: .72; margin-top: 1px; }
+  .cell { min-height: 88px; display: flex; align-items: center; padding-block: 6px; position: relative; }
+  .cell::before { content: ""; position: absolute; inset-block: 2px; inset-inline: -24px; z-index: -1; background: var(--band); }
+  .lane.t-people { --band: var(--people-band); } .lane.t-code { --band: var(--code-band); } .lane.t-ai { --band: var(--ai-band); } .lane.t-svc { --band: var(--svc-band); }
+  .box { position: relative; width: 100%; border: 1.5px solid; border-radius: 9px; padding: 7px 8px; font-size: 11px; line-height: 1.3; z-index: 2; text-align: center; box-shadow: 0 1px 2px rgba(31, 42, 55, .08); }
+  .box b { display: block; font: 600 12px/1.25 var(--font-body); margin-bottom: 2px; }
+  .box span { color: #3E4A59; font-size: 10.5px; }
+  .box .n { position: absolute; top: -8px; left: -8px; width: 18px; height: 18px; border-radius: 50%; background: var(--ink); color: #fff; font: 700 10px/18px var(--font-body); text-align: center; font-style: normal; }
+  .box.people { background: var(--people); border-color: var(--people-b); } .box.code { background: var(--code); border-color: var(--code-b); }
+  .box.ai { background: var(--ai); border-color: var(--ai-b); } .box.svc { background: var(--svc); border-color: var(--svc-b); }
+  svg.wires { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; overflow: visible; }
+  svg.wires path.w { fill: none; stroke: var(--arrow); stroke-width: 1.3; stroke-dasharray: 4 3; }
+  svg.wires .lb rect { fill: #fff; stroke: var(--line); stroke-width: 1; }
+  svg.wires .lb text { font: 600 9.5px var(--font-body); fill: var(--muted); text-anchor: middle; dominant-baseline: central; }
+  .legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 12px; margin-top: 16px; }
+  .legend span { display: inline-flex; align-items: center; padding: 5px 14px; border-radius: 999px; border: 1.5px solid; font-size: 12px; font-weight: 600; }
+  .stack { color: var(--muted); font-size: 11.5px; margin: 10px 0 0; text-align: center; }
+  .list { display: none; margin: 0; padding: 0; list-style: none; }
+  .list li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .list li:last-child { border: 0; }
+  .list .n { width: 24px; height: 24px; border-radius: 50%; background: var(--ink); color: #fff; font: 700 12px/24px var(--font-body); text-align: center; font-style: normal; }
+  .list .who { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .list b { display: block; font-size: 14.5px; } .list p { margin: 2px 0 0; color: var(--muted); font-size: 13.5px; }
+  @media (max-width: 900px) { .board .grid, .wires { display: none; } .list { display: block; } .board { padding-right: 0; } .poster { padding: 18px 14px; } }
+</style>
+
+<div class="wrap"><div class="poster">
+  <h1>Aangan Studio &middot; Phone Enquiries &mdash; Components Map</h1>
+  <p class="sub">One call &rarr; judged, saved, booked, emailed &rarr; the right designer's desk &rarr; the manager sees it in HubSpot</p>
+  <div class="board" id="board">
+    <svg class="wires" id="wires" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#46505E"/></marker></defs></svg>
+    <div class="grid" id="grid"></div>
+    <ol class="list" id="list"></ol>
+  </div>
+  <div class="legend">
+    <span style="background:var(--code);border-color:var(--code-b)">Our code does the work</span>
+    <span style="background:var(--ai);border-color:var(--ai-b)">Gemini does the reasoning</span>
+    <span style="background:var(--svc);border-color:var(--svc-b)">An outside service</span>
+    <span style="background:var(--people);border-color:var(--people-b)">A person decides</span>
+    <span style="background:#fff;border-color:var(--line)">No price is quoted until the consultation</span>
+  </div>
+  <p class="stack">Stack: Vaani (voice) &middot; FastAPI on Vercel &middot; Gemini &middot; Neon Postgres &middot; Cal.com &middot; HubSpot &middot; Resend</p>
+</div></div>
+
+<script>
+const COLS = ["Trigger", "Input", "Context", "Processing", "AI", "Output"];
+// lane: name, sub-label, type
+const LANES = [
+  ["Caller", "Client", "people"], ["Vaani", "Voice agent", "svc"], ["Code", "FastAPI on Vercel", "code"], ["Gemini API", "Reasoning", "ai"], ["Neon", "Memory", "svc"],
+  ["Cal.com", "Booking", "svc"], ["HubSpot", "CRM", "svc"], ["Manager", "Oversight", "people"], ["Resend", "Email", "svc"], ["Designer", "My Desk", "people"]];
+// id, lane, column, title, detail
+const STEPS = [
+  [1, 0, 0, "Phones the studio", "any hour, day or night"],
+  [2, 1, 0, "Answers in seconds", "greets, says the call is recorded"],
+  [3, 1, 1, "Asks one question at a time", "never quotes a price"],
+  [4, 0, 1, "Tells us about the project", "name &middot; area &middot; size &middot; timeline &middot; email &middot; best day"],
+  [5, 1, 2, "Call ends, sends the text", "webhook with the transcript"],
+  [6, 2, 3, "Receives and checks", "confirms with Vaani that the call is real"],
+  [7, 4, 2, "Saves everything", "call &middot; transcript &middot; audit trail"],
+  [8, 3, 4, "Judges the call", "Nikhil's rubric: verdict, summary, mood, key moments"],
+  [9, 2, 5, "Guards, assigns, fans out", "blocks price figures; designer by area and workload"],
+  [10, 5, 5, "Books the consultation", "nearest free slot; emails the invite"],
+  [11, 6, 5, "Creates the CRM record", "contact, deal, note naming the designer"],
+  [12, 7, 5, "Oversees every lead", "the manager's view, in HubSpot"],
+  [13, 8, 5, "Sends two emails", "warm note to the client; full brief to the designer"],
+  [14, 9, 5, "Accepts and works the lead", "next actions, consultations, own map"]];
+const TYPE = ["people", "svc", "code", "ai", "svc", "svc", "svc", "people", "svc", "people"];
+// from, to, kind, label.  kinds: v = vertical, h = same row, e = elbow, dl = down then left, rail = right-hand rail
+const LINKS = [[1, 2, "v", "rings"], [2, 3, "h", "asks"], [3, 4, "v", "answers"], [3, 5, "h", "ends"], [5, 6, "e", "webhook"], [6, 7, "dl", "saves"],
+  [6, 8, "e", "text"], [8, 9, "e", "verdict"], [9, 10, "rail", "books"], [9, 11, "rail", "syncs"], [11, 12, "v", "reads"], [9, 13, "rail", "emails"], [13, 14, "v", "brief"]];
+
+const grid = document.getElementById("grid"), list = document.getElementById("list");
+let html = '<div class="colhead first">Actor</div>' + COLS.map((c, i) => `<div class="colhead${i === 5 ? " last" : ""}">${c}</div>`).join("");
+LANES.forEach((l, li) => {
+  html += `<div class="lane t-${l[2]}"><div class="lname"><b>${l[0]}</b><span>${l[1]}</span></div>`;
+  for (let c = 0; c < 6; c++) {
+    const s = STEPS.find(x => x[1] === li && x[2] === c);
+    html += `<div class="cell">${s ? `<div class="box ${TYPE[li]}" id="s${s[0]}"><i class="n">${s[0]}</i><b>${s[3]}</b><span>${s[4]}</span></div>` : ""}</div>`;
+  }
+  html += "</div>";
+});
+grid.innerHTML = html;
+list.innerHTML = STEPS.map(s => `<li><i class="n">${s[0]}</i><div><div class="who">${LANES[s[1]][0]} &middot; ${COLS[s[2]]}</div><b>${s[3]}</b><p>${s[4]}</p></div></li>`).join("");
+
+function draw() {
+  const svg = document.getElementById("wires");
+  svg.querySelectorAll(".w,.lb").forEach(n => n.remove());
+  if (getComputedStyle(grid).display === "none") return;
+  const root = document.getElementById("board").getBoundingClientRect();
+  const R = id => { const r = document.getElementById("s" + id).getBoundingClientRect(); return { l: r.left - root.left, r: r.right - root.left, t: r.top - root.top, b: r.bottom - root.top, cx: (r.left + r.right) / 2 - root.left, cy: (r.top + r.bottom) / 2 - root.top }; };
+  const NS = "http://www.w3.org/2000/svg";
+  const railX = Math.max(...STEPS.filter(s => s[2] === 5).map(s => R(s[0]).r)) + 20;
+  const put = (d, label, lx, ly) => {
+    const p = document.createElementNS(NS, "path"); p.setAttribute("d", d); p.setAttribute("class", "w"); p.setAttribute("marker-end", "url(#ah)"); svg.appendChild(p);
+    if (label) { const w = label.length * 5.3 + 12, g = document.createElementNS(NS, "g"); g.setAttribute("class", "lb");
+      g.innerHTML = `<rect x="${lx - w / 2}" y="${ly - 8}" width="${w}" height="16" rx="8"/><text x="${lx}" y="${ly}">${label}</text>`; svg.appendChild(g); }
+  };
+  LINKS.forEach(([a, b, k, label]) => {
+    const A = R(a), B = R(b);
+    if (k === "v") { const up = B.cy < A.cy, y1 = up ? A.t : A.b, y2 = up ? B.b + 2 : B.t - 2, gap = Math.abs(y2 - y1); put(`M${A.cx},${y1} L${A.cx},${y2}`, gap >= 20 ? label : "", A.cx, (y1 + y2) / 2); }
+    else if (k === "h") { put(`M${A.r},${A.cy} L${B.l - 2},${B.cy}`, label, (A.r + B.l) / 2, A.cy); }
+    else if (k === "e") { const bus = A.r + (B.l - A.r) / 2; put(`M${A.r},${A.cy} L${bus},${A.cy} L${bus},${B.cy} L${B.l - 2},${B.cy}`, label, bus, B.cy); }
+    else if (k === "dl") { put(`M${A.cx},${A.b} L${A.cx},${B.cy} L${B.r + 2},${B.cy}`, label, (A.cx + B.r) / 2, B.cy); }
+    else if (k === "rail") { put(`M${A.r},${A.cy} L${railX},${A.cy} L${railX},${B.cy} L${B.r + 2},${B.cy}`, label, railX, B.cy); }
+  });
+}
+addEventListener("resize", draw);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
+addEventListener("load", draw); setTimeout(draw, 300);
+</script>
