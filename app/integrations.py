@@ -25,6 +25,22 @@ def _first_stage(c):
     st = sorted(p["stages"], key=lambda x: x.get("displayOrder", 0))[0]
     return p["id"], st["id"]
 
+def _note_html(text):
+    """Plain note text to the HTML HubSpot stores: escaped, line breaks kept, and the dashboard link made clickable."""
+    import html as _h
+    body = _h.escape(text).replace("\n", "<br>")
+    return re.sub(r"(https://[^\s<]+)", r'<a href="\1">\1</a>', body)
+
+def transcript_note(turns, limit=60000):
+    """The call transcript as plain lines with timestamps, trimmed to fit HubSpot's note size limit."""
+    lines = []
+    for t in turns or []:
+        sec = t.get("t")
+        stamp = f"[{int(sec) // 60}:{int(sec) % 60:02d}] " if isinstance(sec, (int, float)) else ""
+        lines.append(f"{stamp}{'AGENT' if t.get('who') == 'agent' else 'CALLER'}: {t.get('text', '')}")
+    out = "\n".join(lines)
+    return out if len(out) <= limit else out[:limit].rsplit("\n", 1)[0] + "\n[transcript trimmed; full text on the dashboard]"
+
 def _real_phone(p):
     """Web-test calls carry labels like 'web-user'; only a real number goes to HubSpot."""
     p = str(p or "")
@@ -47,7 +63,9 @@ def hubspot_sync(call_id, lead, result, call_meta, live=True):
             f"Assigned designer: {call_meta.get('designer') or 'not assigned yet'}\n"
             f"Consultation: {call_meta.get('slot') or 'not booked'}\n"
             f"Uncertainties: {', '.join(result.get('uncertainties') or []) or 'none'}\n"
-            f"Dashboard: {links.url(call_id, 'listen')}")
+            f"Dashboard (listen to the recording): {links.url(call_id, 'listen')}")
+    if call_meta.get("transcript"):
+        note += "\n\nFULL TRANSCRIPT\n" + transcript_note(call_meta["transcript"])
     st = config.DEFAULT_SETTINGS
     amount = round((st["project_low_lakh"] + st["project_high_lakh"]) / 2 * 100000) if verdict == "qualified" else None
     deal = {"dealname": f"{full or 'Caller'} - {lead.get('location') or 'Pune'} - {lead.get('scope') or 'enquiry'}"[:120],
@@ -79,7 +97,7 @@ def hubspot_sync(call_id, lead, result, call_meta, live=True):
                 deal.update({"pipeline": pipe, "dealstage": stage})
                 d = c.post(f"{HS}/crm/v3/objects/deals", json={"properties": deal, "associations": [{"to": {"id": contact_id}, "types": [{"associationCategory": "HUBSPOT_DEFINED", "associationTypeId": 3}]}]})
                 d.raise_for_status(); deal_id = d.json()["id"]
-            n = c.post(f"{HS}/crm/v3/objects/notes", json={"properties": {"hs_note_body": note.replace("\n", "<br>"), "hs_timestamp": datetime.utcnow().isoformat() + "Z"},
+            n = c.post(f"{HS}/crm/v3/objects/notes", json={"properties": {"hs_note_body": _note_html(note), "hs_timestamp": datetime.utcnow().isoformat() + "Z"},
                        "associations": [{"to": {"id": contact_id}, "types": [{"associationCategory": "HUBSPOT_DEFINED", "associationTypeId": 202}]}]})
             n.raise_for_status()
         return {"mode": "live", "status": "synced" if deal_id else "contact and note synced (no deal: not qualified)", "contact_id": contact_id, "deal_id": deal_id}

@@ -126,7 +126,7 @@ def finalize(transcript, started_at, duration_s, source, caller_label, call_id=N
         ints["escalation_email"] = integ.escalation_email(cid, lead, result, live_integrations)
     elif verdict in ("declined", "not_now"):
         ints["decline_email"] = integ.decline_email(cid, lead, live_integrations)
-    ints["hubspot"] = integ.hubspot_sync(cid, lead, result, {"phone": phone, "slot": slot["label"] if slot else None, "designer": (chosen or {}).get("name")}, live_integrations)
+    ints["hubspot"] = integ.hubspot_sync(cid, lead, result, {"phone": phone, "slot": slot["label"] if slot else None, "designer": (chosen or {}).get("name"), "transcript": transcript}, live_integrations)
     mins = duration_s / 60.0
     cost = {"gemini": round(gemini.cost_inr(usage), 3), "telephony": round(mins * config.TELEPHONY_PER_MIN, 3),
             "speech": round(mins * config.SPEECH_PER_MIN, 3), "tokens_in": usage["in"], "tokens_out": usage["out"]}
