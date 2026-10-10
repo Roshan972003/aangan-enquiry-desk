@@ -73,7 +73,7 @@ def turn(cid, text):
     return out["reply"], sess["status"], sess["lead"]
 
 def finalize(transcript, started_at, duration_s, source, caller_label, call_id=None, phone=None, slot_choice=0, slots=None,
-             usage=None, ring_to_answer_s=3.0, live_integrations=True, price_hint=None, missed=False):
+             usage=None, ring_to_answer_s=3.0, live_integrations=True, price_hint=None, missed=False, find_booking=None):
     """Post-call pipeline: judge the call, write the gist, sync HubSpot, send email and invite."""
     cid = call_id or "C" + uuid.uuid4().hex[:8].upper()
     usage = dict(usage or {"in": 0, "out": 0})
@@ -94,7 +94,12 @@ def finalize(transcript, started_at, duration_s, source, caller_label, call_id=N
     ints = {}
     if verdict in ("qualified",):
         ints["designer_email"] = integ.designer_email(cid, lead, result, slot, text, live_integrations)
-        ints["client_invite"] = integ.client_invite(cid, lead, slot, live_integrations, result)
+        booking = find_booking(lead) if find_booking else None
+        if booking:
+            slot = booking["slot"]
+            ints["client_invite"] = booking["invite"]
+        else:
+            ints["client_invite"] = integ.client_invite(cid, lead, slot, live_integrations, result)
     elif verdict == "escalate":
         ints["escalation_email"] = integ.escalation_email(cid, lead, result, live_integrations)
     elif verdict in ("declined", "not_now"):

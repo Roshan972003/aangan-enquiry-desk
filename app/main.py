@@ -6,11 +6,12 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from app import agent, db, stats, config, gemini
+from app.vaani import router as vaani_router
 
 app = FastAPI(title="Aangan Enquiry Desk")
 
 # Optional password gate. Any username, password = APP_PASSWORD. Open when APP_PASSWORD is unset.
-OPEN_PATHS = ("/api/twilio/", "/api/health")
+OPEN_PATHS = ("/api/twilio/", "/api/health", "/api/vaani/")
 
 @app.middleware("http")
 async def password_gate(request, call_next):
@@ -30,6 +31,7 @@ async def password_gate(request, call_next):
             pass
     return Response("Password required", status_code=401, headers={"WWW-Authenticate": 'Basic realm="Aangan Enquiry Desk"'})
 STATIC = Path(__file__).parent / "static"
+app.include_router(vaani_router)
 
 class StartIn(BaseModel):
     caller_label: str = "Simulated caller"
