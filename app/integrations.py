@@ -25,12 +25,17 @@ def _first_stage(c):
     st = sorted(p["stages"], key=lambda x: x.get("displayOrder", 0))[0]
     return p["id"], st["id"]
 
+def _real_phone(p):
+    """Web-test calls carry labels like 'web-user'; only a real number goes to HubSpot."""
+    p = str(p or "")
+    return p if sum(ch.isdigit() for ch in p) >= 7 else ""
+
 def hubspot_sync(call_id, lead, result, call_meta, live=True):
     """Contact for every caller; a deal only for qualified leads so the pipeline stays clean."""
     full = (lead.get("name") or "").strip()
     first, _, last = full.partition(" ")
     verdict = result["verdict"]
-    props = {"firstname": first or "Unknown caller", "lastname": last.strip(), "phone": call_meta.get("phone") or "",
+    props = {"firstname": first or "Unknown caller", "lastname": last.strip(), "phone": _real_phone(call_meta.get("phone")),
              "email": lead.get("email") or "", "city": "Pune",
              "lifecyclestage": "salesqualifiedlead" if verdict == "qualified" else "lead",
              "hs_lead_status": {"qualified": "OPEN_DEAL", "declined": "UNQUALIFIED", "not_now": "ATTEMPTED_TO_CONTACT"}.get(verdict, "NEW")}
@@ -81,18 +86,35 @@ def hubspot_sync(call_id, lead, result, call_meta, live=True):
         return {"mode": "error", "status": f"HubSpot failed: {e}", "file": _outbox("hubspot", f"{call_id}.json", payload)}
 
 # ---------------- Email + invite ----------------
+def _resend(msg: EmailMessage):
+    """Send through the Resend HTTP API. Without a verified domain Resend only delivers to the account owner's own address."""
+    import base64
+    body = msg.get_body(preferencelist=("plain",))
+    payload = {"from": config.RESEND_FROM, "to": [a.strip() for a in str(msg["To"]).split(",") if a.strip()], "subject": str(msg["Subject"]),
+               "text": body.get_content() if body else ""}
+    if msg["Cc"]: payload["cc"] = [a.strip() for a in str(msg["Cc"]).split(",") if a.strip()]
+    atts = [{"filename": p.get_filename() or "attachment", "content": base64.b64encode(p.get_payload(decode=True)).decode()} for p in msg.iter_attachments()]
+    if atts: payload["attachments"] = atts
+    r = httpx.post("https://api.resend.com/emails", json=payload, headers={"Authorization": f"Bearer {config.RESEND_API_KEY}"}, timeout=20)
+    if r.status_code >= 300:
+        raise RuntimeError(f"Resend {r.status_code}: {r.text[:200]}")
+    return r.json().get("id")
+
 def _send(msg: EmailMessage, kind, call_id, live=True):
     fname = f"{call_id}-{kind}.eml"
-    if not (live and config.LIVE_INTEGRATIONS and config.SMTP_HOST):
+    if not (live and config.LIVE_INTEGRATIONS and config.EMAIL_LIVE):
         return {"mode": "outbox", "status": "saved locally, email not live here", "file": _outbox("email", fname, msg.as_string())}
     try:
+        if config.RESEND_API_KEY:
+            rid = _resend(msg)
+            return {"mode": "live", "status": "sent via Resend", "id": rid}
         with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=20) as s:
-            s.starttls(); 
+            s.starttls()
             if config.SMTP_USER: s.login(config.SMTP_USER, config.SMTP_PASS)
             s.send_message(msg)
         return {"mode": "live", "status": "sent"}
     except Exception as e:
-        return {"mode": "error", "status": f"SMTP failed: {e}", "file": _outbox("email", fname, msg.as_string())}
+        return {"mode": "error", "status": f"Email failed: {e}", "file": _outbox("email", fname, msg.as_string())}
 
 def designer_email(call_id, lead, result, slot, transcript_text, live=True):
     d = slot["designer"] if slot else "Designer pool"

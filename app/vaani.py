@@ -120,6 +120,7 @@ def _process(call_id, transcript, started, duration_s, phone, summary_hint=None)
         e = (lead.get("email") or "").lower()
         v, _ = db.kv_get("vaani_booking:" + e) if e else (None, None)
         return v
+    phone = phone if sum(ch.isdigit() for ch in str(phone or "")) >= 7 else None   # web-test calls have no number
     rec = agent.finalize(transcript, started, duration_s, "vaani", str(phone or "Vaani caller"), call_id=cid, phone=phone,
                          ring_to_answer_s=2.0, find_booking=find_booking, missed=not transcript, external_id=str(call_id))
     return rec["id"], rec["verdict"]
@@ -151,7 +152,10 @@ async def post_call(request: Request):
         dur_ms = float(_pick(data, "call_duration", "duration_ms", "duration", default=0) or 0)
     except (TypeError, ValueError):
         dur_ms = 0.0
-    duration_s = max(5.0, dur_ms / 1000.0) if dur_ms else 120.0
+    last_t = max([t.get("t") or 0 for t in transcript] or [0])
+    # the payload's unit is not documented: accept it as ms or as seconds, whichever fits the transcript, else trust the transcript
+    cand = [x for x in (dur_ms / 1000.0, dur_ms) if x and last_t <= x <= last_t + 180]
+    duration_s = cand[0] if cand else (last_t + 8.0 if last_t else (dur_ms / 1000.0 if dur_ms >= 5000 else 60.0))
     ts = _pick(b, "timestamp") or _pick(data, "timestamp", "started_at", "start_time")
     try:
         end = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))

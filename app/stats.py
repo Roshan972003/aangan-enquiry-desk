@@ -257,7 +257,7 @@ def _compute():
         "stages": STAGES, "moods": dict(moods), "escalations": escal, "offhour": offhour, "workload": workload(calls), "red_flags": flags, "forecast": forecast, "today": today,
         "tokens_per_day": [{"date": k, "tokens": t} for k, t in sorted(tok_day.items())],
         "designers": [d["name"] for d in config.DESIGNERS],
-        "gmail": bool(config.SMTP_HOST and config.SMTP_USER),
+        "gmail": config.EMAIL_LIVE,
         "recent": [{"id": c["id"], "started_at": c["started_at"], "caller": c["caller_label"],
                     "name": (c.get("lead") or {}).get("name"), "verdict": ev[c["id"]], "original": c["verdict"],
                     "overridden": ev[c["id"]] != c["verdict"], "gist": c["gist"], "answer_s": c["ring_to_answer_s"],

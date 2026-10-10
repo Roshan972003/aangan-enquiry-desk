@@ -51,7 +51,7 @@ async def llm_down(_, exc):
 @app.get("/api/health")
 def health():
     return {"llm": "mock" if config.MOCK_LLM else ("gemini" if config.GEMINI_API_KEY else "missing key"),
-            "hubspot": bool(config.HUBSPOT_TOKEN), "smtp": bool(config.SMTP_HOST), "vaani_key_set": bool(config.env("VAANI_API_KEY")),
+            "hubspot": bool(config.HUBSPOT_TOKEN), "smtp": bool(config.SMTP_HOST), "email": ("resend" if config.RESEND_API_KEY else ("smtp" if config.SMTP_HOST else None)), "vaani_key_set": bool(config.env("VAANI_API_KEY")),
             "cal": bool(config.env("CAL_API_KEY") and config.env("CAL_EVENT_TYPE_ID")), "db": "neon" if db.PG else "sqlite"}
 
 @app.post("/api/call/start")
@@ -409,6 +409,7 @@ def system_health():
     timed("Vaani API", lambda: vaani_ping() if key else (False, "no key"))
     timed("Database", lambda: (db.kv_get("settings") is not None, "neon" if db.PG else "sqlite"))
     timed("Cal.com", lambda: get("https://api.cal.com/v2/me", headers={"Authorization": "Bearer " + ck}) if ck else (False, "no key"))
+    timed("Email (Resend)", lambda: get("https://api.resend.com/domains", headers={"Authorization": "Bearer " + config.RESEND_API_KEY}) if config.RESEND_API_KEY else (False, "no key"))
     timed("HubSpot", lambda: get("https://api.hubapi.com/crm/v3/objects/contacts", params={"limit": 1}, headers={"Authorization": "Bearer " + config.HUBSPOT_TOKEN}) if config.HUBSPOT_TOKEN else (False, "no token"))
     last, _ = db.kv_get("webhook_last")
     return {"checks": out, "webhook_last": last, "gemini_model": config.GEMINI_MODEL}

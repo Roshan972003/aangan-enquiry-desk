@@ -15,6 +15,9 @@ MOCK_LLM = env("MOCK_LLM", "0") == "1"
 HUBSPOT_TOKEN = env("HUBSPOT_TOKEN")
 SMTP_HOST, SMTP_PORT = env("SMTP_HOST"), int(env("SMTP_PORT", "587") or 587)
 SMTP_USER, SMTP_PASS = env("SMTP_USER"), env("SMTP_PASS")
+RESEND_API_KEY = env("RESEND_API_KEY")
+RESEND_FROM = env("RESEND_FROM", "Aangan Studio <onboarding@resend.dev>")
+EMAIL_LIVE = bool(RESEND_API_KEY or SMTP_HOST)
 STUDIO_EMAIL = env("STUDIO_EMAIL", "studio@example.com")
 STUDIO_HEAD_EMAIL = env("STUDIO_HEAD_EMAIL", "nikhil@example.com")
 
