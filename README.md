@@ -39,7 +39,7 @@ Caller -> Vaani voice agent (answers in seconds, 24x7)
 
 ## Stack
 
-FastAPI (Python), static HTML/JS dashboard, Gemini (`gemini-3.5-flash`), Vaani (voice), Neon Postgres (SQLite locally), Cal.com, HubSpot, Vercel (+ weekly cron), GitHub. Emails via Gmail SMTP.
+FastAPI (Python), static HTML/JS dashboard, Gemini (`gemini-3.5-flash`), Vaani (voice), Neon Postgres (SQLite locally), Cal.com, HubSpot, Vercel (+ weekly cron), GitHub. Emails via Resend.
 
 ## Run locally
 
@@ -53,7 +53,7 @@ cp .env.example .env     # add GEMINI_API_KEY; LIVE_INTEGRATIONS=0 keeps HubSpot
 ## Honest status and decisions
 
 - **Not yet run end to end by a real phone call.** The Vaani agent, webhook, post-call booking and HubSpot sync were each verified (Vaani connectivity test, real Gemini + Cal.com + HubSpot runs). A live voice call and an inbound phone number still need to be set up in Vaani.
-- **Email is not live.** SMTP (Gmail App Password) is not configured, so designer and escalation emails are saved to the outbox rather than delivered. Set `SMTP_HOST/PORT/USER/PASS`, `STUDIO_EMAIL`, `STUDIO_HEAD_EMAIL` and redeploy.
+- **Email runs through Resend** (`RESEND_API_KEY`, Gmail SMTP still supported). Delivery verified. Without a verified sending domain Resend only delivers to the account owner's address, so all designer and escalation emails currently go to `STUDIO_HEAD_EMAIL` (the owner). To email real designers and clients, verify a domain at resend.com/domains and set `RESEND_FROM`.
 - **Designers are placeholders** in `designers.json` (name, email, optional `areas`, `commercial`). Placeholder addresses fall back to the studio head.
 - **Pricing rule wins over the brief.** The brief mentions per-sq-ft quotes, but `pricing.md` forbids any number, so the agent never quotes one.
 - **Open question for Nikhil:** `services.md` caps commercial work near 3,000 sq ft with no minimum; a 500 sq ft minimum appears only in transcript T18.
