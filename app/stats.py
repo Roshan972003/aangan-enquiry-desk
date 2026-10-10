@@ -113,6 +113,12 @@ def least_loaded(calls, area=None, commercial=False):
         pool = match or pool
     return min(pool, key=lambda d: wl.get(d["name"], 0))
 
+def _top(counter, n=8):
+    """Top n labels; the rest are summed into 'Other' so the chart total always matches."""
+    items = counter.most_common()
+    if len(items) <= n: return items
+    return items[:n - 1] + [("Other", sum(v for _, v in items[n - 1:]))]
+
 def compute():
     """Cached for 60 s so dashboard views do not wake the database each time."""
     if _CACHE["v"] is not None and time.time() - _CACHE["t"] < 60:
@@ -246,7 +252,7 @@ def _compute():
         "roi_pipeline_x": round(pipe_inr / cost) if cost else None, "roi_expected_x": round(expected_inr / cost) if cost else None,
         "time_saved_hours": round(saved_min / 60.0, 1), "settings": st,
         "days": [{"date": k, **v} for k, v in sorted(days.items())], "hours": hours,
-        "types": types.most_common(8), "areas": areas.most_common(8),
+        "types": _top(types), "areas": _top(areas),
         "kanban": {key: [lead_card(c) for c in q_calls if stage_of(c) == key] for key, _ in STAGES},
         "stages": STAGES, "moods": dict(moods), "escalations": escal, "offhour": offhour, "workload": workload(calls), "red_flags": flags, "forecast": forecast, "today": today,
         "tokens_per_day": [{"date": k, "tokens": t} for k, t in sorted(tok_day.items())],

@@ -138,7 +138,7 @@ def pdf_bytes():
                 ["Running cost, total", inr(s["cost_total_inr"])], ["   Gemini AI", inr(cc["gemini"])], ["   Telephony", inr(cc["telephony"])], ["   Speech", inr(cc["speech"])],
                 ["Cost per call / per qualified lead", f"{inr(s['cost_per_call_inr'])} / {inr(s['cost_per_qualified_inr'])}"],
                 ["Voice minutes / AI tokens", f"{s['voice_minutes']} min / {s['tokens_in'] + s['tokens_out']:,}"],
-                ["Front-desk time saved", f"{s['time_saved_hours']} h ({s['settings']['minutes_saved_per_call']} min per call)"],
+                ["Front-desk time saved", f"{s['time_saved_hours']} h (call time handled + {s['settings']['minutes_saved_per_call']} min admin per call)"],
                 ["Month-end projection (run-rate)", f"{f['projected_qualified_month']} qualified leads, {lk(f['projected_pipeline_lakh'])} pipeline, {lk(f['projected_revenue_lakh'])} expected"]],
                [230, 270], head=False), Spacer(1, 4),
            P(f"Assumptions: average project {s['settings']['project_low_lakh']} to {s['settings']['project_high_lakh']} lakh, close rate {s['settings']['close_rate_pct']}%, "

@@ -185,3 +185,5 @@ a{color:#A5B4FC}[data-theme=light] a{color:var(--accent)}
 .lead .cd{white-space:nowrap}
 .lead .tg,.lead [data-touch]{padding:2px 9px}
 .lead .tag{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;box-sizing:border-box}
+
+.feed{max-height:560px;overflow-y:auto}
