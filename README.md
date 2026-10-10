@@ -35,7 +35,7 @@ Caller -> Vaani voice agent (answers in seconds, 24x7)
 
 ## Accuracy check
 
-`replay.py` runs the 20 real September 2026 call transcripts (`data/enquiries_sep2026.txt`) through the same pipeline. Result against my reading of the rubric: **20 of 20 verdicts match** (judgement calls are listed in `replay.py`).
+`replay.py` runs the 20 real September 2026 call transcripts (kept out of this repo because they contain customer names; put the file at `data/enquiries_sep2026.txt` to run it) through the same pipeline. Result against my reading of the rubric: **20 of 20 verdicts match** (judgement calls are listed in `replay.py`).
 
 ## Stack
 

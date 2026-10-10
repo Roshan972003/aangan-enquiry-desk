@@ -4,3 +4,4 @@ data/aangan.db
 outbox/
 __pycache__/
 vercel-env.txt
+data/enquiries_sep2026.txt
