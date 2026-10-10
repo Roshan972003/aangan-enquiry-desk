@@ -37,6 +37,24 @@ Caller -> Vaani voice agent (answers in seconds, 24x7)
 
 `replay.py` runs the 20 real September 2026 call transcripts (kept out of this repo because they contain customer names; put the file at `data/enquiries_sep2026.txt` to run it) through the same pipeline. Result against my reading of the rubric: **20 of 20 verdicts match** (judgement calls are listed in `replay.py`).
 
+## For evaluators: choose who is viewing the dashboard
+
+The dashboard has a **View as** dropdown at the top right. It switches the whole page between two audiences:
+
+- **Studio (everyone)**: the manager's overview (digest, KPIs, cost and ROI, analytics, all leads). In the real setup the manager works in HubSpot, so this view is mostly for oversight.
+- **A designer** (Kabir Singh, Arjun Reddy, Rancho, Rocky Bhai, Pushpa Raj): that designer's own desk. It shows only their leads: what to do next (leads waiting for first contact), consultations ahead, unclaimed leads they can claim, their own pipeline, map and escalations.
+
+Direct links (no login in this demo, by design):
+
+- Studio view: https://aangan-enquiry-desk.vercel.app/
+- Kabir Singh: https://aangan-enquiry-desk.vercel.app/?designer=Kabir%20Singh
+- Arjun Reddy: https://aangan-enquiry-desk.vercel.app/?designer=Arjun%20Reddy
+- Rancho: https://aangan-enquiry-desk.vercel.app/?designer=Rancho
+- Rocky Bhai: https://aangan-enquiry-desk.vercel.app/?designer=Rocky%20Bhai
+- Pushpa Raj: https://aangan-enquiry-desk.vercel.app/?designer=Pushpa%20Raj
+
+The choice is remembered in the browser. "Back to studio view" returns to the full overview. The five designers are sample names; in production each designer would sign in and see only their own desk.
+
 ## Stack
 
 FastAPI (Python), static HTML/JS dashboard, Gemini (`gemini-3.5-flash`), Vaani (voice), Neon Postgres (SQLite locally), Cal.com, HubSpot, Vercel (+ weekly cron), GitHub. Emails via Resend.
