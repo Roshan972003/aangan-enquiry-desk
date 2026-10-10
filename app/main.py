@@ -409,7 +409,11 @@ def system_health():
     timed("Vaani API", lambda: vaani_ping() if key else (False, "no key"))
     timed("Database", lambda: (db.kv_get("settings") is not None, "neon" if db.PG else "sqlite"))
     timed("Cal.com", lambda: get("https://api.cal.com/v2/me", headers={"Authorization": "Bearer " + ck}) if ck else (False, "no key"))
-    timed("Email (Resend)", lambda: get("https://api.resend.com/domains", headers={"Authorization": "Bearer " + config.RESEND_API_KEY}) if config.RESEND_API_KEY else (False, "no key"))
+    def resend_ping():
+        r = httpx.get("https://api.resend.com/domains", headers={"Authorization": "Bearer " + config.RESEND_API_KEY}, timeout=15)
+        # a sending-only key is refused here with 401 "restricted", which still proves the key is valid
+        return (r.status_code == 200 or (r.status_code == 401 and "restricted" in r.text.lower())), "key valid (sending access)" if r.status_code == 401 else "HTTP %s" % r.status_code
+    timed("Email (Resend)", lambda: resend_ping() if config.RESEND_API_KEY else (False, "no key"))
     timed("HubSpot", lambda: get("https://api.hubapi.com/crm/v3/objects/contacts", params={"limit": 1}, headers={"Authorization": "Bearer " + config.HUBSPOT_TOKEN}) if config.HUBSPOT_TOKEN else (False, "no token"))
     last, _ = db.kv_get("webhook_last")
     return {"checks": out, "webhook_last": last, "gemini_model": config.GEMINI_MODEL}
