@@ -47,6 +47,33 @@ def area_of(lead):
             return a
     return loc.split(",")[0].strip().title() if loc.strip() else "Not given"
 
+def workload(calls):
+    """Active leads per designer (qualified, assigned, not yet closed) with a light / balanced / heavy badge relative to the team average."""
+    active = Counter()
+    unassigned = 0
+    for c in calls:
+        if eff_verdict(c) != "qualified" or stage_of(c) == "closed_won":
+            continue
+        who = (c.get("ops") or {}).get("assigned_to")
+        if who:
+            active[who] += 1
+        else:
+            unassigned += 1
+    names = [d["name"] for d in config.DESIGNERS]
+    avg = sum(active[n] for n in names) / max(1, len(names))
+    out = []
+    for n in names:
+        a = active[n]
+        level = "light" if a == 0 or a < avg * 0.7 else "heavy" if (a >= 3 and a > avg * 1.3) else "balanced"
+        out.append({"name": n, "active": a, "level": level})
+    return {"designers": out, "unassigned": unassigned, "average": round(avg, 1)}
+
+def least_loaded(calls):
+    """The designer with the fewest active leads. Ties go to the first on the list."""
+    wl = workload(calls)["designers"]
+    best = min(wl, key=lambda d: d["active"])
+    return next(d for d in config.DESIGNERS if d["name"] == best["name"])
+
 def compute():
     """Cached for 60 s so dashboard views do not wake the database each time."""
     if _CACHE["v"] is not None and time.time() - _CACHE["t"] < 60:
@@ -148,6 +175,13 @@ def _compute():
     td = [c for c in calls if c["started_at"][:10] == today_s]
     today = {"calls": len(td), "qualified": sum(1 for c in td if ev[c["id"]] == "qualified"), "declined": sum(1 for c in td if ev[c["id"]] in ("declined", "not_now")),
              "escalations": sum(1 for c in td if ev[c["id"]] == "escalate")}
+    # revenue saved on off-hours calls: qualified leads that arrived outside the desk's hours, which would otherwise have waited or been lost
+    loss = st.get("offhour_loss_pct", 48) / 100.0
+    per_lead_inr = mid * 1e5 * st["close_rate_pct"] / 100.0 * loss
+    off_q = [c for c in calls if not c["in_hours"] and ev[c["id"]] == "qualified"]
+    offhour = {"calls": sum(1 for c in calls if not c["in_hours"]), "qualified": len(off_q), "saved_inr": round(len(off_q) * per_lead_inr),
+               "per_lead_inr": round(per_lead_inr), "loss_pct": st.get("offhour_loss_pct", 48),
+               "recent": [{"id": c["id"], "name": (c.get("lead") or {}).get("name") or c["caller_label"], "at": c["started_at"]} for c in off_q[:5]]}
     invites = sum(1 for c in calls if (c["integrations"] or {}).get("client_invite", {}).get("mode") in ("live", "outbox"))
     return {
         "calls": n, "answered": len(answered), "missed": by_v["missed"],
@@ -166,7 +200,7 @@ def _compute():
         "days": [{"date": k, **v} for k, v in sorted(days.items())], "hours": hours,
         "types": types.most_common(8), "areas": areas.most_common(8),
         "kanban": {key: [lead_card(c) for c in q_calls if stage_of(c) == key] for key, _ in STAGES},
-        "stages": STAGES, "escalations": escal, "red_flags": flags, "forecast": forecast, "today": today,
+        "stages": STAGES, "escalations": escal, "offhour": offhour, "workload": workload(calls), "red_flags": flags, "forecast": forecast, "today": today,
         "tokens_per_day": [{"date": k, "tokens": t} for k, t in sorted(tok_day.items())],
         "designers": [d["name"] for d in config.DESIGNERS],
         "gmail": bool(config.SMTP_HOST and config.SMTP_USER),
@@ -175,6 +209,7 @@ def _compute():
                     "overridden": ev[c["id"]] != c["verdict"], "gist": c["gist"], "answer_s": c["ring_to_answer_s"],
                     "cost_inr": c["cost_inr"], "in_hours": c["in_hours"], "source": c["source"],
                     "price_asked": bool((c.get("result") or {}).get("price_asked")),
+                    "sentiment": (c.get("result") or {}).get("sentiment"), "sentiment_score": (c.get("result") or {}).get("sentiment_score"),
                     "hubspot": (c["integrations"] or {}).get("hubspot", {}).get("mode"),
                     "designer_email": (c["integrations"] or {}).get("designer_email", {}).get("mode"),
                     "invite": (c["integrations"] or {}).get("client_invite", {}).get("mode")} for c in calls[:60]],

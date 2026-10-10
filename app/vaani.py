@@ -95,11 +95,20 @@ def _turns(raw: Any):
                     out.append({"who": "agent" if who in ("agent", "assistant", "bot", "ai", "model") else "caller", "text": str(text)})
     elif isinstance(raw, str):
         for line in raw.splitlines():
-            m = re.match(r"\s*(?:\[[^\]]*\]\s*)?(agent|assistant|bot|ai|user|caller|customer|human)\s*[:\-]\s*(.*)", line, re.I)
-            if m and m.group(2).strip():
-                out.append({"who": "agent" if m.group(1).lower() in ("agent", "assistant", "bot", "ai") else "caller", "text": m.group(2).strip()})
+            m = re.match(r"\s*(?:\[([^\]]*)\]\s*)?(agent|assistant|bot|ai|user|caller|customer|human)\s*[:\-]\s*(.*)", line, re.I)
+            if m and m.group(3).strip():
+                turn = {"who": "agent" if m.group(2).lower() in ("agent", "assistant", "bot", "ai") else "caller", "text": m.group(3).strip()}
+                tm = re.match(r"(\d+):(\d+):(\d+)", m.group(1) or "")
+                if tm:
+                    sec = int(tm.group(1)) * 3600 + int(tm.group(2)) * 60 + int(tm.group(3))
+                    first = out[0].get("_abs", sec) if out else sec
+                    turn["_abs"] = sec
+                    turn["t"] = max(0, sec - first)
+                out.append(turn)
             elif out and line.strip():
                 out[-1]["text"] += " " + line.strip()
+    for t in out:
+        t.pop("_abs", None)
     return out
 
 def _process(call_id, transcript, started, duration_s, phone, summary_hint=None):

@@ -32,4 +32,4 @@ OPEN_HOUR, CLOSE_HOUR = 10, 19   # front desk hours, from the brief
 AVG_PROJECT_LAKH = 11            # midpoint of the Rs 8-14 lakh average in the brief
 
 # Assumptions behind the ROI and time-saved numbers. Editable on the dashboard and stored in the database.
-DEFAULT_SETTINGS = {"close_rate_pct": 10, "minutes_saved_per_call": 6, "project_low_lakh": 8, "project_high_lakh": 14}
+DEFAULT_SETTINGS = {"close_rate_pct": 10, "minutes_saved_per_call": 6, "project_low_lakh": 8, "project_high_lakh": 14, "offhour_loss_pct": 48}

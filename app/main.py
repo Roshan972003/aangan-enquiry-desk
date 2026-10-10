@@ -102,6 +102,7 @@ class SettingsIn(BaseModel):
     minutes_saved_per_call: Optional[float] = None
     project_low_lakh: Optional[float] = None
     project_high_lakh: Optional[float] = None
+    offhour_loss_pct: Optional[float] = None
 
 def _actor(request: Request):
     return request.headers.get("x-actor") or "dashboard user"
@@ -157,6 +158,32 @@ def email_lead(cid: str, request: Request):
     db.audit_add(cid, "email", {"to": mail.get("to"), "message": mail.get("status")}, _actor(request))
     db.update_ops(cid, {"emailed": datetime.now().isoformat(timespec="seconds"), "assigned_to": d["name"]})
     return JSONResponse({"ok": sent, "message": ("Emailed " + str(mail.get("to"))) if sent else "Saved, not sent: Gmail is not connected yet (" + str(mail.get("status")) + ")"})
+
+@app.post("/api/calls/{cid}/auto-assign")
+def auto_assign(cid: str, request: Request):
+    """Give the lead to the designer with the fewest active leads and email them."""
+    c = _must(cid)
+    d = stats.least_loaded(db.all_calls())
+    return assign(cid, AssignIn(designer=d["name"]), request)
+
+@app.post("/api/workload/balance")
+def balance_workload(request: Request):
+    """Spread every unassigned qualified lead across the designers, always to the least busy one. Assigns only, sends no emails."""
+    calls = db.all_calls()
+    loads = {d["name"]: 0 for d in config.DESIGNERS}
+    for c in calls:
+        w = (c.get("ops") or {}).get("assigned_to")
+        if stats.eff_verdict(c) == "qualified" and stats.stage_of(c) != "closed_won" and w in loads:
+            loads[w] += 1
+    moved = 0
+    for c in calls:
+        if stats.eff_verdict(c) == "qualified" and stats.stage_of(c) != "closed_won" and not (c.get("ops") or {}).get("assigned_to"):
+            name = min(loads, key=loads.get)
+            loads[name] += 1
+            db.update_ops(c["id"], {"assigned_to": name, "auto_assigned": True})
+            db.audit_add(c["id"], "assign", {"from": None, "to": name, "note": "balanced across designers"}, _actor(request))
+            moved += 1
+    return {"ok": True, "assigned": moved}
 
 @app.post("/api/calls/{cid}/override")
 def override(cid: str, b: OverrideIn, request: Request):

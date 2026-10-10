@@ -44,7 +44,7 @@ def _agent_turn(sess):
             sess["lead"][k] = v
     sess["price_asked"] = sess["price_asked"] or bool(out.get("asked_price"))
     sess["history"].append({"role": "model", "text": reply})
-    sess["transcript"].append({"who": "agent", "text": reply})
+    sess["transcript"].append({"who": "agent", "text": reply, "t": round(time.time() - sess["t0"], 1)})
     if out.get("slot_choice"):
         sess["slot_choice"] = out["slot_choice"]
     sess["status"] = out["status"]
@@ -67,7 +67,7 @@ def start_call(caller_label="Simulated caller", started_at=None, phone=None):
 def turn(cid, text):
     sess = load(cid)
     sess["history"].append({"role": "user", "text": text})
-    sess["transcript"].append({"who": "caller", "text": text})
+    sess["transcript"].append({"who": "caller", "text": text, "t": round(time.time() - sess["t0"], 1)})
     out = _agent_turn(sess)
     _save(sess)
     return out["reply"], sess["status"], sess["lead"]
@@ -82,9 +82,13 @@ def finalize(transcript, started_at, duration_s, source, caller_label, call_id=N
         result = {"verdict": "missed", "criteria": [], "lead": {}, "price_asked": False, "gist": "Missed call with no voicemail. An AI callback is queued.",
                   "uncertainties": [], "dont_reask": [], "first_question_for_designer": "", "needs_human_review": False}
     else:
-        result, u = gemini.generate(prompts.FINAL_SYSTEM, [{"role": "user", "text": f"Call time: {started_at:%A %d %B %Y %I:%M %p}\n\nTRANSCRIPT\n{text}"}],
+        numbered = "\n".join(f"[{i}] {t['who'].upper()}: {t['text']}" for i, t in enumerate(transcript))
+        result, u = gemini.generate(prompts.FINAL_SYSTEM, [{"role": "user", "text": f"Call time: {started_at:%A %d %B %Y %I:%M %p}\n\nTRANSCRIPT\n{numbered}"}],
                                     prompts.FINAL_SCHEMA, temperature=0.1)
         usage["in"] += u["in"]; usage["out"] += u["out"]
+    result["key_events"] = attach_event_times(result.get("key_events"), transcript, duration_s)
+    if result.get("sentiment_score") is None:
+        result["sentiment_score"] = {"negative": 25, "neutral": 60, "positive": 85}.get(result.get("sentiment"), None)
     lead = result.get("lead") or {}
     slot = None
     if slots and slot_choice:
@@ -92,6 +96,12 @@ def finalize(transcript, started_at, duration_s, source, caller_label, call_id=N
     # a qualified lead gets a designer email even without a booked slot (designer calls the client)
     verdict = result["verdict"]
     ints = {}
+    chosen = None
+    if verdict == "qualified":
+        from app import stats as _st
+        chosen = _st.least_loaded(db.all_calls())
+        if slot:
+            slot = dict(slot); slot.update({"designer": chosen["name"], "designer_email": chosen["email"]})
     if verdict in ("qualified",):
         ints["designer_email"] = integ.designer_email(cid, lead, result, slot, text, live_integrations)
         booking = find_booking(lead) if find_booking else None
@@ -113,6 +123,8 @@ def finalize(transcript, started_at, duration_s, source, caller_label, call_id=N
            "ring_to_answer_s": ring_to_answer_s, "in_hours": int(in_hours(started_at)), "duration_s": duration_s, "missed": int(verdict == "missed"),
            "transcript": transcript, "lead": lead, "result": result, "verdict": verdict, "gist": result["gist"],
            "cost": cost, "cost_inr": total, "integrations": ints, "slot": slot, "external_id": external_id}
+    if chosen:
+        rec["ops"] = {"assigned_to": chosen["name"], "auto_assigned": True}
     db.save_call(rec)
     return rec
 
@@ -122,3 +134,18 @@ def end_call(cid):
     return finalize(sess["transcript"], sess["started_at"], max(5.0, time.time() - sess["t0"]), "live", sess["caller_label"], call_id=cid,
                     phone=sess.get("phone"), slot_choice=sess["slot_choice"], slots=sess["slots"], usage=sess["usage"],
                     ring_to_answer_s=sess.get("ring_to_answer_s", 3.0))
+
+
+def attach_event_times(events, transcript, duration_s):
+    """Give each key event a time in seconds: the real timestamp when the transcript has one, otherwise its position in the call."""
+    out = []
+    n = len(transcript)
+    for e in events or []:
+        i = e.get("turn")
+        if not isinstance(i, int) or not (0 <= i < n):
+            continue
+        t = transcript[i].get("t")
+        if t is None:
+            t = round((i / max(1, n - 1)) * duration_s, 1)
+        out.append({"turn": i, "type": e.get("type"), "label": e.get("label"), "t": t})
+    return out

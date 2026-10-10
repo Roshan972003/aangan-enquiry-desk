@@ -141,3 +141,9 @@ def audit_list(call_id=None, limit=50):
     for r in rows:
         d = dict(r); d["detail"] = json.loads(d["detail"]) if d.get("detail") else None; out.append(d)
     return out
+
+def update_result(cid, result: dict):
+    with conn() as k:
+        _exec(k, "UPDATE calls SET result=? WHERE id=?", (json.dumps(result), cid))
+    from app import stats
+    stats.invalidate()
