@@ -52,7 +52,7 @@ cp .env.example .env     # add GEMINI_API_KEY; LIVE_INTEGRATIONS=0 keeps HubSpot
 
 ## Honest status and decisions
 
-- **Not yet run end to end by a real phone call.** The Vaani agent, webhook, post-call booking and HubSpot sync were each verified (Vaani connectivity test, real Gemini + Cal.com + HubSpot runs). A live voice call and an inbound phone number still need to be set up in Vaani.
+- **Verified end to end with real Vaani voice calls** (browser web calls). One call produced: transcript and Gemini verdict, auto-assigned designer, HubSpot contact and deal, a Cal.com booking (status accepted) from the caller's preferred time, a warm client email and a designer email (both via Resend), and a dashboard update. An inbound phone number is not attached to the Vaani agent yet, so the calls so far came from Vaani's web test, not the phone network.
 - **Email runs through Resend** (`RESEND_API_KEY`, Gmail SMTP still supported). Delivery verified. Without a verified sending domain Resend only delivers to the account owner's address, so all designer and escalation emails currently go to `STUDIO_HEAD_EMAIL` (the owner). To email real designers and clients, verify a domain at resend.com/domains and set `RESEND_FROM`.
 - **Designers are placeholders** in `designers.json` (name, email, optional `areas`, `commercial`). Placeholder addresses fall back to the studio head.
 - **Pricing rule wins over the brief.** The brief mentions per-sq-ft quotes, but `pricing.md` forbids any number, so the agent never quotes one.
