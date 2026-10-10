@@ -160,7 +160,7 @@ def pdf_bytes():
 
     # 8 risks
     el += [Paragraph("8. Escalations and follow-up risks", H2)]
-    esc_rows = [[e["id"], e.get("name") or "", (e.get("gist") or "")[:230]] for e in s["escalations"]]
+    esc_rows = [[e["id"], e.get("name") or "", (e.get("gist") or "")[:420]] for e in s["escalations"]]
     el += [tbl([["Call", "Caller", "Why it needs a human"]] + esc_rows, [50, 110, 340], wrap=True) if esc_rows else P("No open escalations.")]
     if s["red_flags"]:
         el += [Spacer(1, 4), tbl([["Call", "Flag", "Caller", "Detail"]] + [[r["id"], r["kind"], r.get("name") or "", (r.get("gist") or "")[:140]] for r in s["red_flags"]], [45, 110, 110, 235], wrap=True)]
