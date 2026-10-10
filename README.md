@@ -17,6 +17,7 @@ AI phone agent for Aangan Studio. Scope: incoming phone calls only.
 
 ## Not done yet
 - Real phone number: /api/twilio/voice and /api/twilio/turn are an untested stub. Vaani key is stored in .env but not wired (need its API docs).
+- Calendar: Cal.com (event type 'Aangan design consultation', 60 min). Free slots come from Cal.com and the booking is made there, so Cal.com emails the client the invite. Falls back to a mock calendar plus .ics email if Cal.com fails. Tested live.
 - HubSpot and SMTP code paths are written but untested against live accounts.
 - designers.json holds placeholders. Slots come from a mock calendar (app/slots.py); swap for Google Calendar free/busy.
 - Costs are estimates from the rates in .env, not vendor bills.

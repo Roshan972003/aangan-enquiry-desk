@@ -81,9 +81,35 @@ def designer_email(call_id, lead, result, slot, transcript_text, live=True):
     m = EmailMessage(); m["From"] = config.STUDIO_EMAIL; m["To"] = to; m["Cc"] = config.STUDIO_HEAD_EMAIL; m["Subject"] = subj; m.set_content(body)
     r = _send(m, "designer", call_id, live); r.update({"to": to, "subject": subj, "body": body}); return r
 
-def client_invite(call_id, lead, slot, live=True):
+def cal_book(call_id, lead, slot, result):
+    """Book on Cal.com. Cal.com emails the client a confirmation with the calendar invite."""
+    from datetime import timezone
+    start = datetime.fromisoformat(slot["start"]).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    body = {"start": start, "eventTypeId": int(config.env("CAL_EVENT_TYPE_ID")),
+            "attendee": {"name": lead.get("name") or "Aangan enquiry", "email": lead["email"], "timeZone": "Asia/Kolkata", "language": "en"},
+            "metadata": {"aangan_call_id": call_id},
+            "bookingFieldsResponses": {"notes": f"{result.get('gist','')}\nPricing is confirmed by your designer at the consultation."}}
+    r = httpx.post("https://api.cal.com/v2/bookings", json=body, timeout=30,
+                   headers={"Authorization": f"Bearer {config.env('CAL_API_KEY')}", "cal-api-version": "2024-08-13", "Content-Type": "application/json"})
+    r.raise_for_status()
+    d = r.json()["data"]
+    return {"mode": "live", "status": "booked on Cal.com, invite emailed by Cal.com", "booking_uid": d.get("uid"), "to": lead["email"],
+            "subject": "Aangan design consultation, " + slot["label"], "body": f"Booking {d.get('uid')} confirmed for {slot['label']}. Cal.com sent the client a confirmation with the calendar invite."}
+
+def client_invite(call_id, lead, slot, live=True, result=None):
     if not (lead.get("email") and slot):
         return {"mode": "skipped", "status": "no client email or no slot, nothing to invite"}
+    if live and slot.get("source") == "cal" and config.env("CAL_API_KEY"):
+        try:
+            return cal_book(call_id, lead, slot, result or {})
+        except Exception as e:
+            err = str(e).replace(config.env("CAL_API_KEY"), "***")
+            fallback = _client_invite_ics(call_id, lead, slot, live)
+            fallback["status"] = f"Cal.com booking failed ({err[:120]}); sent .ics email instead. " + fallback.get("status", "")
+            return fallback
+    return _client_invite_ics(call_id, lead, slot, live)
+
+def _client_invite_ics(call_id, lead, slot, live=True):
     ics = build_invite(call_id, slot["start"], 60, "Aangan Studio: design consultation",
                        f"Free design consultation with {slot['designer']}. Reply to reschedule.", "Your site or video call, to be confirmed by your designer",
                        config.STUDIO_EMAIL, [(lead.get("name") or "Client", lead["email"]), (slot["designer"], slot["designer_email"])])

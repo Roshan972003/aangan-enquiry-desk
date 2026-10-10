@@ -94,7 +94,7 @@ def finalize(transcript, started_at, duration_s, source, caller_label, call_id=N
     ints = {}
     if verdict in ("qualified",):
         ints["designer_email"] = integ.designer_email(cid, lead, result, slot, text, live_integrations)
-        ints["client_invite"] = integ.client_invite(cid, lead, slot, live_integrations)
+        ints["client_invite"] = integ.client_invite(cid, lead, slot, live_integrations, result)
     elif verdict == "escalate":
         ints["escalation_email"] = integ.escalation_email(cid, lead, result, live_integrations)
     elif verdict in ("declined", "not_now"):
