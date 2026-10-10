@@ -52,7 +52,8 @@ async def llm_down(_, exc):
 @app.get("/api/health")
 def health():
     return {"llm": "mock" if config.MOCK_LLM else ("gemini" if config.GEMINI_API_KEY else "missing key"),
-            "hubspot": bool(config.HUBSPOT_TOKEN), "smtp": bool(config.SMTP_HOST), "vaani_key_set": bool(config.env("VAANI_API_KEY"))}
+            "hubspot": bool(config.HUBSPOT_TOKEN), "smtp": bool(config.SMTP_HOST), "vaani_key_set": bool(config.env("VAANI_API_KEY")),
+            "cal": bool(config.env("CAL_API_KEY") and config.env("CAL_EVENT_TYPE_ID")), "db": "neon" if db.PG else "sqlite"}
 
 @app.post("/api/call/start")
 def call_start(b: StartIn):
