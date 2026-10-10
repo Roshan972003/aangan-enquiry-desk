@@ -8,6 +8,30 @@ from pydantic import BaseModel
 from app import agent, db, stats, config, gemini
 
 app = FastAPI(title="Aangan Enquiry Desk")
+
+# Password gate. Any username, password = APP_PASSWORD. Open for local dev when unset,
+# but on Vercel the site stays locked until APP_PASSWORD is set. Phone-provider webhooks and the health check stay open.
+OPEN_PATHS = ("/api/twilio/", "/api/health")
+
+@app.middleware("http")
+async def password_gate(request, call_next):
+    pw = config.env("APP_PASSWORD")
+    if request.url.path.startswith(OPEN_PATHS):
+        return await call_next(request)
+    if not pw:
+        if config.env("VERCEL"):
+            return Response("Locked: set APP_PASSWORD in the Vercel environment variables and redeploy.", status_code=503)
+        return await call_next(request)
+    import base64, secrets
+    h = request.headers.get("authorization", "")
+    if h.lower().startswith("basic "):
+        try:
+            given = base64.b64decode(h[6:]).decode().split(":", 1)[1]
+            if secrets.compare_digest(given.encode(), pw.encode()):
+                return await call_next(request)
+        except Exception:
+            pass
+    return Response("Password required", status_code=401, headers={"WWW-Authenticate": 'Basic realm="Aangan Enquiry Desk"'})
 STATIC = Path(__file__).parent / "static"
 
 class StartIn(BaseModel):
