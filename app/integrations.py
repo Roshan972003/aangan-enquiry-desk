@@ -26,38 +26,57 @@ def _first_stage(c):
     return p["id"], st["id"]
 
 def hubspot_sync(call_id, lead, result, call_meta, live=True):
-    props = {"firstname": (lead.get("name") or "Unknown caller"), "phone": call_meta.get("phone") or "",
-             "email": lead.get("email") or "", "city": "Pune"}
+    """Contact for every caller; a deal only for qualified leads so the pipeline stays clean."""
+    full = (lead.get("name") or "").strip()
+    first, _, last = full.partition(" ")
+    verdict = result["verdict"]
+    props = {"firstname": first or "Unknown caller", "lastname": last.strip(), "phone": call_meta.get("phone") or "",
+             "email": lead.get("email") or "", "city": "Pune",
+             "lifecyclestage": "salesqualifiedlead" if verdict == "qualified" else "lead",
+             "hs_lead_status": {"qualified": "OPEN_DEAL", "declined": "UNQUALIFIED", "not_now": "ATTEMPTED_TO_CONTACT"}.get(verdict, "NEW")}
     props = {k: v for k, v in props.items() if v}
-    note = (f"Aangan phone enquiry {call_id}\nVerdict: {result['verdict']}\nGist: {result['gist']}\n"
-            f"Scope: {lead.get('scope')} | Area: {lead.get('location')} | Size: {lead.get('sqft')} sq ft | Timeline: {lead.get('timeline')}\n"
+    sqft = int(lead["sqft"]) if lead.get("sqft") else None
+    note = (f"Aangan phone enquiry {call_id}\nVerdict: {verdict}\nGist: {result['gist']}\n"
+            f"Scope: {lead.get('scope')} | Area: {lead.get('location')} | Size: {sqft or '?'} sq ft | Timeline: {lead.get('timeline')}\n"
             f"Decision maker: {lead.get('decision_maker')} | Referral: {lead.get('referral')}\n"
-            f"Uncertainties: {', '.join(result.get('uncertainties') or []) or 'none'}")
-    payload = {"contact": props, "deal": {"dealname": f"{lead.get('name') or 'Caller'} - {lead.get('location') or 'Pune'} - {lead.get('scope') or 'enquiry'}",
-                                          "pipeline": "default", "dealstage": "appointmentscheduled" if call_meta.get("slot") else "qualifiedtobuy"},
-               "note": note, "meeting_slot": call_meta.get("slot")}
+            f"Consultation: {call_meta.get('slot') or 'not booked'}\n"
+            f"Uncertainties: {', '.join(result.get('uncertainties') or []) or 'none'}\n"
+            f"Dashboard: {links.url(call_id, 'listen')}")
+    st = config.DEFAULT_SETTINGS
+    amount = round((st["project_low_lakh"] + st["project_high_lakh"]) / 2 * 100000) if verdict == "qualified" else None
+    deal = {"dealname": f"{full or 'Caller'} - {lead.get('location') or 'Pune'} - {lead.get('scope') or 'enquiry'}"[:120],
+            "description": f"{result['gist']}\nInternal project estimate only. No price was quoted to the client.",
+            "pipeline": "default", "dealstage": "appointmentscheduled" if call_meta.get("slot") else "qualifiedtobuy"}
+    if amount: deal["amount"] = str(amount)
+    payload = {"contact": props, "deal": deal if verdict == "qualified" else None, "note": note, "meeting_slot": call_meta.get("slot")}
     if not (live and config.LIVE_INTEGRATIONS and config.HUBSPOT_TOKEN):
         return {"mode": "outbox", "status": "saved locally, HubSpot not live here", "file": _outbox("hubspot", f"{call_id}.json", payload)}
     h = {"Authorization": f"Bearer {config.HUBSPOT_TOKEN}", "Content-Type": "application/json"}
+    def _find(c, prop, val):
+        s = c.post(f"{HS}/crm/v3/objects/contacts/search", json={"filterGroups": [{"filters": [{"propertyName": prop, "operator": "EQ", "value": val}]}]})
+        s.raise_for_status()
+        r = s.json().get("results")
+        return r[0]["id"] if r else None
     try:
         with httpx.Client(timeout=20, headers=h) as c:
             contact_id = None
-            if props.get("phone"):
-                s = c.post(f"{HS}/crm/v3/objects/contacts/search", json={"filterGroups": [{"filters": [{"propertyName": "phone", "operator": "EQ", "value": props["phone"]}]}]})
-                s.raise_for_status()
-                if s.json().get("results"):
-                    contact_id = s.json()["results"][0]["id"]
-                    c.patch(f"{HS}/crm/v3/objects/contacts/{contact_id}", json={"properties": props}).raise_for_status()
-            if not contact_id:
+            for prop in ("phone", "email"):
+                if props.get(prop) and not contact_id:
+                    contact_id = _find(c, prop, props[prop])
+            if contact_id:
+                c.patch(f"{HS}/crm/v3/objects/contacts/{contact_id}", json={"properties": props}).raise_for_status()
+            else:
                 r = c.post(f"{HS}/crm/v3/objects/contacts", json={"properties": props}); r.raise_for_status(); contact_id = r.json()["id"]
-            pipe, stage = _first_stage(c)
-            payload["deal"].update({"pipeline": pipe, "dealstage": stage})
-            deal = c.post(f"{HS}/crm/v3/objects/deals", json={"properties": payload["deal"], "associations": [{"to": {"id": contact_id}, "types": [{"associationCategory": "HUBSPOT_DEFINED", "associationTypeId": 3}]}]})
-            deal.raise_for_status()
+            deal_id = None
+            if verdict == "qualified":
+                pipe, stage = _first_stage(c)
+                deal.update({"pipeline": pipe, "dealstage": stage})
+                d = c.post(f"{HS}/crm/v3/objects/deals", json={"properties": deal, "associations": [{"to": {"id": contact_id}, "types": [{"associationCategory": "HUBSPOT_DEFINED", "associationTypeId": 3}]}]})
+                d.raise_for_status(); deal_id = d.json()["id"]
             n = c.post(f"{HS}/crm/v3/objects/notes", json={"properties": {"hs_note_body": note.replace("\n", "<br>"), "hs_timestamp": datetime.utcnow().isoformat() + "Z"},
                        "associations": [{"to": {"id": contact_id}, "types": [{"associationCategory": "HUBSPOT_DEFINED", "associationTypeId": 202}]}]})
             n.raise_for_status()
-        return {"mode": "live", "status": "synced", "contact_id": contact_id, "deal_id": deal.json()["id"]}
+        return {"mode": "live", "status": "synced" if deal_id else "contact and note synced (no deal: not qualified)", "contact_id": contact_id, "deal_id": deal_id}
     except httpx.HTTPError as e:
         return {"mode": "error", "status": f"HubSpot failed: {e}", "file": _outbox("hubspot", f"{call_id}.json", payload)}
 
