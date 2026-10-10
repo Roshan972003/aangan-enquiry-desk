@@ -5,14 +5,16 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="/static/theme.js"></script>
 <link rel="stylesheet" href="/static/style.css"></head><body>
-<div class="nav"><b>Aangan Enquiry Desk</b><a class="on" href="/">Dashboard</a><a href="/simulator">Call simulator</a><button class="ghost" id="refresh" style="padding:5px 10px">Refresh</button></div>
+<div class="nav"><b>Aangan Enquiry Desk</b><a class="on" href="/">Dashboard</a><a href="/simulator">Call simulator</a><button class="ghost" id="refresh" style="padding:5px 10px">Refresh</button><label class="hint" style="margin-left:auto;display:flex;align-items:center;gap:6px">View as<select id="viewas" aria-label="View as designer"><option value="">Studio (everyone)</option></select></label></div>
 <div class="wrap wide">
-  <div style="display:flex;justify-content:space-between;align-items:end;gap:12px;flex-wrap:wrap"><div><div class="eyebrow">Aangan Studio · phone enquiries · live</div><h2 style="font-size:26px;margin-top:4px">Executive dashboard</h2></div><div class="actions" style="margin:0"><span class="hint">Your name for the audit log</span><input id="actor" style="width:130px" placeholder="e.g. Nikhil"><a class="btn ghost" href="/api/export.csv" download>Export CSV</a><a class="btn ghost" href="/api/export.pdf" download>Export PDF</a></div></div>
-  <div class="card"><div class="searchbar"><input id="q" placeholder='Search every call in plain English, e.g. "clients asking for 4BHK in Baner"' aria-label="Search calls"><button id="q-go">Search</button></div><div class="chips" style="margin-top:8px"><button class="chipb" data-ex="clients asking for 4BHK in Baner">4BHK in Baner</button><button class="chipb" data-ex="calls where the client complained about timeline">Timeline complaints</button><button class="chipb" data-ex="callers who were unhappy or frustrated">Unhappy callers</button><button class="chipb" data-ex="callers outside Pune we had to decline">Out of area</button></div><div id="q-out"></div></div>
+  <div style="display:flex;justify-content:space-between;align-items:end;gap:12px;flex-wrap:wrap"><div><div class="eyebrow">Aangan Studio · phone enquiries · live</div><h2 style="font-size:26px;margin-top:4px" id="ptitle">Executive dashboard</h2></div><div class="actions" style="margin:0"><span class="hint">Your name for the audit log</span><input id="actor" style="width:130px" placeholder="e.g. Nikhil"><a class="btn ghost mgr" href="/api/export.csv" download>Export CSV</a><a class="btn ghost mgr" href="/api/export.pdf" download>Export PDF</a></div></div>
+  <div class="card mgr"><div class="searchbar"><input id="q" placeholder='Search every call in plain English, e.g. "clients asking for 4BHK in Baner"' aria-label="Search calls"><button id="q-go">Search</button></div><div class="chips" style="margin-top:8px"><button class="chipb" data-ex="clients asking for 4BHK in Baner">4BHK in Baner</button><button class="chipb" data-ex="calls where the client complained about timeline">Timeline complaints</button><button class="chipb" data-ex="callers who were unhappy or frustrated">Unhappy callers</button><button class="chipb" data-ex="callers outside Pune we had to decline">Out of area</button></div><div id="q-out"></div></div>
   <div id="empty" class="card" hidden>No calls yet. Make one in the <a href="/simulator">simulator</a> or a Vaani web call, or load the September transcripts with <span class="mono">python replay.py</span>.</div>
 
+  <div id="me"></div>
+
   <!-- 1. AI summary banner -->
-  <div class="card digest">
+  <div class="card digest mgr">
     <div style="display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap"><h3>AI executive digest <span class="pill" style="background:var(--gold-soft);color:var(--warn)">Gemini</span></h3><span class="hint" id="brief-when"></span><button id="brief-btn" class="ghost">Write today's brief</button></div>
     <div class="live" id="live"></div>
     <div id="brief" style="margin-top:6px"><span class="muted">No brief yet.</span></div><div id="brief-share" class="actions" style="margin-top:10px;align-items:center"></div>
@@ -20,16 +22,16 @@
 
   <!-- 2. four metric cards -->
   <div class="grid g4" id="kpis"></div>
-  <div class="card offh" id="offh"></div>
+  <div class="card offh mgr" id="offh"></div>
 
   <!-- 3. command centre: left tracker + feed, centre kanban, right escalations -->
   <div class="cmd">
     <aside class="side">
       <div class="card" id="live-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h3>Calls in flight</h3><label class="livetg"><input type="checkbox" id="mute"> mute chime</label></div><div id="inflight"><p class="muted" style="margin:6px 0 0">Checking…</p></div></div>
-      <div class="card defl"><h3>Pricing deflection tracker</h3><p class="hint">Callers who asked for a per-square-foot rate and were safely steered to the free consultation.</p><div id="defl"></div></div>
-      <div class="card"><h3>Response speed</h3><p class="hint">Target: every enquiry answered within 5 minutes, day or night.</p><div id="speed"></div></div>
-      <div class="card"><h3>Designer workload</h3><div id="wl"></div></div>
-      <div class="card"><h3>Caller mood heatmap</h3><p class="hint">Read from what callers said, not from vocal tone. Each square is a call, newest first; click one to open it.</p><div id="moodmap"></div></div>
+      <div class="card defl mgr"><h3>Pricing deflection tracker</h3><p class="hint">Callers who asked for a per-square-foot rate and were safely steered to the free consultation.</p><div id="defl"></div></div>
+      <div class="card mgr"><h3>Response speed</h3><p class="hint">Target: every enquiry answered within 5 minutes, day or night.</p><div id="speed"></div></div>
+      <div class="card mgr"><h3>Designer workload</h3><div id="wl"></div></div>
+      <div class="card mgr"><h3>Caller mood heatmap</h3><p class="hint">Read from what callers said, not from vocal tone. Each square is a call, newest first; click one to open it.</p><div id="moodmap"></div></div>
       <div class="card"><h3>Enquiry feed</h3><div class="chips" id="filters" style="margin:6px 0"></div><div class="feed" id="feed"></div></div>
     </aside>
     <section class="mid">
@@ -41,25 +43,25 @@
   </div>
 
   <!-- deeper insight -->
-  <div class="grid g3">
+  <div class="grid g3 mgr">
     <div class="card"><h3>Property types</h3><div class="bars" id="types"></div></div>
     <div class="card"><h3>Location hotspots</h3><div class="bars" id="areas"></div></div>
     <div class="card"><h3>Calls per day</h3><p class="hint">Grey: all calls. Green: qualified.</p><div id="days"></div></div>
   </div>
   <div class="card"><h3>Map of qualified leads, Pune and PCMC</h3><p class="hint">Every qualified lead placed by area. Colour shows its pipeline stage; click a pin to see the lead and open it. Pins in the same area are spread slightly so none hide.</p><div id="map" style="height:380px;border-radius:12px;overflow:hidden"></div><div id="maplegend" class="hint" style="margin-top:8px"></div></div>
-  <div class="two">
+  <div class="two mgr">
     <div class="card"><h3>Why leads were lost</h3><p class="hint">The main reason each declined or deferred call did not become a lead.</p><div class="bars" id="lost"></div></div>
     <div class="card"><h3>When enquiries arrive and convert</h3><p class="hint">Weekday by hour (IST). Darker means more calls; a green ring marks hours where calls qualified. Hover for the numbers.</p><div id="heat"></div></div>
   </div>
-  <div class="two">
+  <div class="two mgr">
     <div class="card"><h3>Voice system and guardrails</h3><div id="guard"></div></div>
     <div class="card"><h3>Return and running cost</h3><div id="roi"></div></div>
   </div>
-  <div class="two">
+  <div class="two mgr">
     <div class="card"><h3>Month-end forecast</h3><div id="fc"></div></div>
     <div class="card"><h3>System health</h3><div id="sys"><p class="muted">Press "Check now" to test each connection.</p></div><div class="actions"><button class="ghost" id="sys-go">Check now</button></div><div id="tok"></div></div>
   </div>
-  <div class="grid g3">
+  <div class="grid g3 mgr">
     <div class="card"><h3>When calls arrive</h3><p class="hint">Gold hours are outside the desk's 10am to 7pm.</p><div id="hours"></div></div>
     <div class="card"><h3>Connections</h3><div id="conn" style="display:flex;flex-direction:column;gap:8px"></div></div>
     <div class="card"><h3>Assumptions</h3><p class="hint">These drive the ROI and time-saved numbers. Change them to match your own figures.</p><div class="asm" id="asm"></div></div>
@@ -72,7 +74,27 @@ const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"]/g,c
 const inr=x=>'₹'+(+x).toLocaleString('en-IN',{maximumFractionDigits:2}),lakh=x=>x>=100?(x/100).toFixed(1)+' Cr':(+x).toLocaleString('en-IN',{maximumFractionDigits:1})+' L';
 const xfmt=n=>n==null?'-':n>=1000?(n/1000).toFixed(1)+'K×':n+'×';
 const VL={qualified:'Qualified',declined:'Declined',not_now:'Not now',escalate:'Escalated',missed:'Missed',review:'Review'};
-let S=null,filter='all',cur=null;
+let S=null,SR=null,filter='all',cur=null,DM=(()=>{try{return new URLSearchParams(location.search).get('designer')||localStorage.getItem('aangan-viewas')||''}catch(e){return ''}})();
+function scoped(s){if(!DM)return s;const me=DM,k={};for(const [key] of s.stages)k[key]=s.kanban[key].filter(c=>c.assigned_to===me);
+  const ids=new Set(Object.values(k).flat().map(c=>c.id));
+  return {...s,kanban:k,pool:s.kanban.qualified.filter(c=>!c.assigned_to),map:(s.map||[]).filter(m=>m.designer===me),recent:s.recent.filter(r=>ids.has(r.id)),escalations:s.escalations.filter(e=>ids.has(e.id)),red_flags:s.red_flags.filter(f=>ids.has(f.id))}}
+function fillViewAs(){const v=$('viewas');if(!v)return;const names=SR.workload.designers.map(d=>d.name);if(DM&&!names.includes(DM)){DM='';document.body.classList.remove('dm')}
+  v.innerHTML='<option value="">Studio (everyone)</option>'+SR.workload.designers.map(d=>`<option value="${esc(d.name)}"${d.name===DM?' selected':''}>${esc(d.name)} · ${esc(d.title||'')}</option>`).join('');v.onchange=e=>setView(e.target.value)}
+function titleView(){const t=$('ptitle');if(t)t.textContent=DM?'My leads: '+DM:'Executive dashboard'}
+function setView(name){DM=name||'';try{localStorage.setItem('aangan-viewas',DM)}catch(e){}document.body.classList.toggle('dm',!!DM);titleView();if($('viewas'))$('viewas').value=DM;if(SR){S=scoped(SR);render();try{renderInsights()}catch(e){console.error(e)}renderMe()}}
+async function markTouch(id){await post('/api/calls/'+id+'/touch');toast('Marked as contacted');await load(true)}
+async function claim(id){try{const j=await post('/api/calls/'+id+'/assign',{designer:DM});toast('Claimed. Email: '+(j.email||'done')+(j.hubspot?' · '+j.hubspot:''));await load(true)}catch(e){toast(e.message)}}
+const fmtWhen=iso=>{try{return new Date(iso).toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'numeric',minute:'2-digit',timeZone:'Asia/Kolkata'})}catch(e){return iso}};
+function renderMe(){const el=$('me');if(!el)return;if(!DM){el.innerHTML='';return}
+  const mine=Object.values(S.kanban).flat(),active=mine.filter(c=>c.stage!=='closed_won'),need=active.filter(c=>!c.first_touch).sort((a,b)=>a.ended_ts-b.ended_ts);
+  const up=active.filter(c=>c.slot_start&&new Date(c.slot_start)>new Date()).sort((a,b)=>new Date(a.slot_start)-new Date(b.slot_start));
+  const des=(SR.workload.designers||[]).find(d=>d.name===DM)||{},pool=S.pool||[];
+  const row=c=>`<div class="frow3"><div><b>${esc(c.name)}</b> <span class="muted">${esc(c.type)} · ${esc(c.area)}${c.sqft?' · '+c.sqft+' sq ft':''}</span><div class="hint">${esc(c.gist||'')}</div></div><div class="actions" style="margin:0">${c.phone?`<a class="btn ghost" href="tel:${esc(c.phone)}">Call</a>`:''}${c.email?`<a class="btn ghost" href="mailto:${esc(c.email)}">Email</a>`:''}</div></div>`;
+  el.innerHTML=`<div class="card"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center"><div><div class="eyebrow">Your desk</div><h2 style="font-size:22px;margin-top:4px">Hi ${esc(DM.split(' ')[0])}</h2><div class="hint">${esc(des.title||'Designer')} · ${active.length} active lead${active.length==1?'':'s'} · workload ${esc(des.level||'light')}</div></div><button class="ghost" onclick="setView('')">Back to studio view</button></div></div>
+  <div class="two"><div class="card"><h3>Do this next</h3><p class="hint">New leads waiting for your first contact, longest wait first.</p>${need.length?need.map(c=>`<div class="frow3"><div><b>${esc(c.name)}</b> <span class="muted">${esc(c.type)} · ${esc(c.area)}${c.sqft?' · '+c.sqft+' sq ft':''}</span><div class="hint">${esc(c.slot?'Consultation '+c.slot:'No consultation booked, call to fix a time')} · ${touchTag(c)}</div></div><div class="actions" style="margin:0">${c.phone?`<a class="btn ghost" href="tel:${esc(c.phone)}">Call</a>`:''}${c.email?`<a class="btn ghost" href="mailto:${esc(c.email)}">Email</a>`:''}<button class="ghost" onclick="markTouch('${c.id}')">Mark contacted</button><button class="ghost" onclick="openCall('${c.id}')">Open</button></div></div>`).join(''):'<p class="muted">Nothing waiting. All your leads have been contacted.</p>'}</div>
+  <div class="card"><h3>Consultations ahead</h3><p class="hint">Booked through Cal.com, in time order.</p>${up.length?up.map(c=>`<div class="frow3"><div><b>${esc(fmtWhen(c.slot_start))}</b><div class="hint">${esc(c.name)} · ${esc(c.type)} · ${esc(c.area)}</div></div><button class="ghost" onclick="openCall('${c.id}')">Open</button></div>`).join(''):'<p class="muted">No consultations booked yet.</p>'}</div></div>
+  <div class="card"><h3>Unclaimed leads you can take</h3><p class="hint">Qualified leads nobody owns yet. Claiming assigns it to you, emails you the brief and notes it in HubSpot for the manager.</p>${pool.length?pool.map(c=>`<div class="frow3"><div><b>${esc(c.name)}</b> <span class="muted">${esc(c.type)} · ${esc(c.area)}${c.sqft?' · '+c.sqft+' sq ft':''}</span><div class="hint">${esc(c.gist||'')}</div></div><div class="actions" style="margin:0"><button class="ghost" onclick="openCall('${c.id}')">Open</button><button onclick="claim('${c.id}')">Claim this lead</button></div></div>`).join(''):'<p class="muted">No unclaimed leads right now.</p>'}</div>`}
+
 function toast(t){const e=$('toast');e.textContent=t;e.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>e.hidden=true,3200)}
 function actor(){try{return localStorage.getItem('aangan-actor')||''}catch(e){return ''}}
 async function post(url,body){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-Actor':actor()||'dashboard user'},body:JSON.stringify(body||{})});const j=await r.json().catch(()=>({}));if(!r.ok&&!j.message)throw new Error(j.detail||j.error||r.status);return j}
@@ -138,6 +160,12 @@ function render(){
    ['Response speed rate (under 5 min)',s.within_5_min_pct==null?'-':s.within_5_min_pct+'<small>%</small>','Median '+secs(s.median_answer_s)+' · '+s.after_hours+' after hours',level(s.within_5_min_pct,95,80),spark(d.map(x=>x.within5/Math.max(x.calls,1)*100),acc)],
    ['AI containment rate',s.containment_pct==null?'-':s.containment_pct+'<small>%</small>',s.contained+' of '+s.calls+' calls handled with no desk help',level(s.containment_pct,85,70),spark(d.map(x=>x.calls),acc)],
    ['Total running cost',inr(s.cost_total_inr),'Voice '+inr(s.cost_components.telephony+s.cost_components.speech)+' · AI tokens '+inr(s.cost_components.gemini),level(s.cost_per_qualified_inr==null?100:100-s.cost_per_qualified_inr,60,30),spark(d.map(x=>x.cost),gold),'cost']];
+  if(DM){const mine=Object.values(s.kanban).flat(),act=mine.filter(c=>c.stage!=='closed_won'),mid=(s.settings.project_low_lakh+s.settings.project_high_lakh)/2,wv=act.reduce((a,c)=>a+c.win/100*mid,0);
+    const wait=act.filter(c=>!c.first_touch),upc=act.filter(c=>c.slot_start&&new Date(c.slot_start)>new Date()).sort((a,b)=>new Date(a.slot_start)-new Date(b.slot_start));
+    K.length=0;K.push(['My active leads',act.length+'',(s.kanban.consultation_booked||[]).length+' with a consultation booked · '+(s.kanban.site_visit||[]).length+' at site visit','g',''],
+      ['Waiting for first contact',wait.length+'',wait.length?'Longest wait: '+mmss(Date.now()/1000-Math.min(...wait.map(c=>c.ended_ts))):'All contacted',wait.length?'r':'g',''],
+      ['Consultations ahead',upc.length+'',upc.length?'Next: '+fmtWhen(upc[0].slot_start):'None booked','g',''],
+      ['My win-weighted pipeline',lakhL(wv),'Each lead counts at its own win chance','g','','good-k'])}
   $('kpis').innerHTML=K.map(k=>`<div class="card kpi ${k[5]||''}"><span class="l"><i class="dot ${k[3]}"></i>${k[0]}</span><span class="v">${k[1]}</span><span class="s">${k[2]}</span>${k[4]}</div>`).join('');
   const o=s.offhour,prevOff=window.__offPrev||0;
   $('offh').innerHTML=`<div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center"><div><div class="eyebrow" style="color:var(--good)">Revenue saved on off-hours calls</div><div class="bigcount" id="offh-n">₹0</div><div class="hint" style="max-width:46ch">Expected revenue from ${o.qualified} qualified lead${o.qualified==1?'':'s'} that called outside 10am to 7pm, when nobody was at the desk to answer.</div><label class="livetg" style="margin-top:8px"><input type="checkbox" id="live-on"> Live mode: refresh every 60 seconds</label></div><div style="min-width:250px;flex:1;max-width:470px"><div class="kvr"><span>Off-hours calls</span><b>${o.calls}</b></div><div class="kvr"><span>Qualified from them</span><b>${o.qualified}</b></div><div class="kvr"><span>Value per lead</span><b>${inr(o.per_lead_inr)}</b></div><p class="hint">Per lead: average project ₹${(s.settings.project_low_lakh+s.settings.project_high_lakh)/2} L × ${s.settings.close_rate_pct}% close rate × ${o.loss_pct}% chance the lead is lost without a fast reply. All three are assumptions you can edit under Assumptions.</p></div></div>`;
@@ -215,7 +243,7 @@ function render(){
 }
 async function load(force){
   if(force){await fetch('/api/stats?t='+Date.now())}
-  S=await (await fetch('/api/stats')).json();render();try{renderInsights()}catch(e){console.error(e)}loadBrief(false);
+  SR=await (await fetch('/api/stats')).json();S=scoped(SR);fillViewAs();titleView();render();try{renderInsights()}catch(e){console.error(e)}renderMe();loadBrief(false);
 }
 const BSEC=['Snapshot','Wins','Risks','Lost leads','Actions','Outlook'];
 let briefParts=null,briefMeta=null;
@@ -298,5 +326,5 @@ $('sys-go').onclick=async()=>{$('sys').innerHTML='<p class="muted">Checking…</
  $('sys').innerHTML=r.checks.map(c=>`<div class="kvr"><span><i class="dot ${c.ok?'g':'r'}"></i>${c.name}</span><span class="mono">${c.ms} ms <span class="muted">${esc(c.note)}</span></span></div>`).join('')+`<div class="kvr"><span><i class="dot ${r.webhook_last?'g':'y'}"></i>Vaani webhook</span><span class="muted">${r.webhook_last?'last event '+esc(r.webhook_last.event||'')+' at '+esc((r.webhook_last.at||'').replace('T',' ')):'no event received yet'}</span></div><div class="kvr"><span>AI model</span><span class="mono">${esc(r.gemini_model)}</span></div>`};
 try{$('actor').value=actor()}catch(e){}$('actor').onchange=()=>{try{localStorage.setItem('aangan-actor',$('actor').value.trim())}catch(e){}};
 $('brief-btn').onclick=()=>loadBrief(true);$('refresh').onclick=()=>load(true);
-setLive(liveOn);pollLive();load().then(()=>{const q=new URLSearchParams(location.search).get('call');if(q)openCall(q)});let last=Date.now();document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Date.now()-last>60000){last=Date.now();load()}});
+document.body.classList.toggle('dm',!!DM);setLive(liveOn);pollLive();load().then(()=>{const q=new URLSearchParams(location.search).get('call');if(q)openCall(q)});let last=Date.now();document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Date.now()-last>60000){last=Date.now();load()}});
 </script></body></html>

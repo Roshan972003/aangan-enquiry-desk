@@ -190,3 +190,7 @@ a{color:#A5B4FC}[data-theme=light] a{color:var(--accent)}
 
 #lost .r{grid-template-columns:170px minmax(0,1fr) 62px}
 #map .leaflet-popup-content button{padding:5px 10px}
+
+body.dm .mgr{display:none!important}
+.frow3{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 4px;border-bottom:1px solid var(--line)}.frow3>div:first-child{min-width:0;flex:1 1 260px}
+#viewas{max-width:210px}

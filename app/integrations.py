@@ -1,5 +1,5 @@
 """HubSpot, email and calendar invite. Each runs live when credentials exist, otherwise writes to outbox/."""
-import json, smtplib, uuid
+import json, re, smtplib, uuid
 from email.message import EmailMessage
 from datetime import datetime
 import httpx
@@ -44,13 +44,14 @@ def hubspot_sync(call_id, lead, result, call_meta, live=True):
     note = (f"Aangan phone enquiry {call_id}\nVerdict: {verdict}\nGist: {result['gist']}\n"
             f"Scope: {lead.get('scope')} | Area: {lead.get('location')} | Size: {sqft or '?'} sq ft | Timeline: {lead.get('timeline')}\n"
             f"Decision maker: {lead.get('decision_maker')} | Referral: {lead.get('referral')}\n"
+            f"Assigned designer: {call_meta.get('designer') or 'not assigned yet'}\n"
             f"Consultation: {call_meta.get('slot') or 'not booked'}\n"
             f"Uncertainties: {', '.join(result.get('uncertainties') or []) or 'none'}\n"
             f"Dashboard: {links.url(call_id, 'listen')}")
     st = config.DEFAULT_SETTINGS
     amount = round((st["project_low_lakh"] + st["project_high_lakh"]) / 2 * 100000) if verdict == "qualified" else None
     deal = {"dealname": f"{full or 'Caller'} - {lead.get('location') or 'Pune'} - {lead.get('scope') or 'enquiry'}"[:120],
-            "description": f"{result['gist']}\nInternal project estimate only. No price was quoted to the client.",
+            "description": f"Designer: {call_meta.get('designer') or 'not assigned yet'}\n{result['gist']}\nInternal project estimate only. No price was quoted to the client.",
             "pipeline": "default", "dealstage": "appointmentscheduled" if call_meta.get("slot") else "qualifiedtobuy"}
     if amount: deal["amount"] = str(amount)
     payload = {"contact": props, "deal": deal if verdict == "qualified" else None, "note": note, "meeting_slot": call_meta.get("slot")}
@@ -213,6 +214,25 @@ def decline_email(call_id, lead, live=True):
     body = "Thank you for calling. This may not be the right fit for us right now, but please reach out if your scope or timeline changes.\n\nAangan Studio"
     m.set_content(body); r = _send(m, "decline", call_id, live); r.update({"to": lead["email"], "subject": m["Subject"], "body": body}); return r
 
+
+def hubspot_assign_note(call, designer, by="dashboard"):
+    """Keep HubSpot in step when a lead is (re)assigned: a note on the deal and contact, and the designer named on the deal. Best effort."""
+    hs = (call.get("integrations") or {}).get("hubspot") or {}
+    if not (config.HUBSPOT_TOKEN and config.LIVE_INTEGRATIONS and hs.get("contact_id")):
+        return "no HubSpot record"
+    h = {"Authorization": f"Bearer {config.HUBSPOT_TOKEN}", "Content-Type": "application/json"}
+    try:
+        with httpx.Client(timeout=20, headers=h) as c:
+            assoc = [{"to": {"id": hs["contact_id"]}, "types": [{"associationCategory": "HUBSPOT_DEFINED", "associationTypeId": 202}]}]
+            if hs.get("deal_id"):
+                assoc.append({"to": {"id": hs["deal_id"]}, "types": [{"associationCategory": "HUBSPOT_DEFINED", "associationTypeId": 214}]})
+                d = c.get(f"{HS}/crm/v3/objects/deals/{hs['deal_id']}", params={"properties": "description"}).json().get("properties", {})
+                body = re.sub(r"^Designer: .*\n?", "", d.get("description") or "")
+                c.patch(f"{HS}/crm/v3/objects/deals/{hs['deal_id']}", json={"properties": {"description": f"Designer: {designer}\n{body}"}})
+            c.post(f"{HS}/crm/v3/objects/notes", json={"properties": {"hs_note_body": f"Lead assigned to {designer} ({by}).", "hs_timestamp": datetime.utcnow().isoformat() + "Z"}, "associations": assoc}).raise_for_status()
+        return "HubSpot updated"
+    except Exception as e:
+        return "HubSpot not updated: " + str(e)[:80]
 
 def hubspot_move_stage(deal_id, stage_key):
     """Keep the HubSpot deal stage in step with the dashboard board. Best effort."""

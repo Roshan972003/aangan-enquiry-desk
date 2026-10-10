@@ -253,7 +253,9 @@ def _compute():
         ended = (datetime.fromisoformat(c["started_at"]) + timedelta(seconds=c["duration_s"] or 0)).isoformat()
         return {"win": wc, "win_why": why, "ended_at": ended, "ended_ts": int((datetime.fromisoformat(ended) - timedelta(hours=5, minutes=30)).replace(tzinfo=__import__("datetime").timezone.utc).timestamp()), "first_touch": ops.get("first_touch"), "id": c["id"], "name": lead.get("name") or "Caller", "type": prop_type(lead), "area": area_of(lead), "sqft": lead.get("sqft"),
                 "timeline": lead.get("timeline"), "stage": stage_of(c), "emailed": bool(ops.get("emailed")), "assigned_to": ops.get("assigned_to"), "gist": c["gist"],
-                "slot": (c.get("slot") or {}).get("label"), "started_at": c["started_at"], "overridden": bool(ops.get("override"))}
+                "slot": (c.get("slot") or {}).get("label"), "slot_start": (c.get("slot") or {}).get("start"), "accepted": bool(ops.get("accepted")),
+                "phone": (c.get("caller_label") if sum(ch.isdigit() for ch in str(c.get("caller_label") or "")) >= 7 else None), "email": lead.get("email"),
+                "started_at": c["started_at"], "overridden": bool(ops.get("override"))}
     escal = [{"id": c["id"], "name": (c.get("lead") or {}).get("name") or c["caller_label"], "phone": c["caller_label"], "gist": c["gist"],
               "started_at": c["started_at"], "callback": ((c.get("ops") or {}).get("callback") or "pending")}
              for c in calls if ev[c["id"]] == "escalate"]
@@ -328,7 +330,7 @@ def _compute():
         "tokens_per_day": [{"date": k, "tokens": t} for k, t in sorted(tok_day.items())],
         "designers": [d["name"] for d in config.DESIGNERS],
         "gmail": config.EMAIL_LIVE,
-        "recent": [{"id": c["id"], "started_at": c["started_at"], "caller": c["caller_label"],
+        "recent": [{"id": c["id"], "assigned_to": (c.get("ops") or {}).get("assigned_to"), "started_at": c["started_at"], "caller": c["caller_label"],
                     "name": (c.get("lead") or {}).get("name"), "verdict": ev[c["id"]], "original": c["verdict"],
                     "overridden": ev[c["id"]] != c["verdict"], "gist": c["gist"], "answer_s": c["ring_to_answer_s"],
                     "cost_inr": c["cost_inr"], "in_hours": c["in_hours"], "source": c["source"],

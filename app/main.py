@@ -143,7 +143,8 @@ def assign(cid: str, b: AssignIn, request: Request):
     before = (c.get("ops") or {}).get("assigned_to")
     db.update_ops(cid, {"assigned_to": d["name"], "assign_email": mail.get("status")})
     db.audit_add(cid, "assign", {"from": before, "to": d["name"]}, _actor(request))
-    return {"ok": True, "email": mail.get("status")}
+    hs = integ.hubspot_assign_note(c, d["name"], _actor(request))
+    return {"ok": True, "email": mail.get("status"), "hubspot": hs}
 
 @app.post("/api/calls/{cid}/client-email")
 def client_email(cid: str):
