@@ -101,6 +101,13 @@ def _resend(msg: EmailMessage):
             subject = "[Test copy] " + subject
         to, cc = [owner], []
     payload = {"from": config.RESEND_FROM, "to": to, "subject": subject, "text": text}
+    hb = msg.get_body(preferencelist=("html",))
+    if hb:
+        html = hb.get_content()
+        if text.startswith("[TEST COPY"):
+            banner = text.split("\n\n", 1)[0]
+            html = f'<div style="background:#FEF3C7;color:#92400E;padding:10px 14px;font:13px sans-serif">{banner.replace("<", "&lt;")}</div>' + html
+        payload["html"] = html
     if cc: payload["cc"] = cc
     atts = [{"filename": p.get_filename() or "attachment", "content": base64.b64encode(p.get_payload(decode=True)).decode()} for p in msg.iter_attachments()]
     if atts: payload["attachments"] = atts
@@ -125,22 +132,14 @@ def _send(msg: EmailMessage, kind, call_id, live=True):
     except Exception as e:
         return {"mode": "error", "status": f"Email failed: {e}", "file": _outbox("email", fname, msg.as_string())}
 
-def designer_email(call_id, lead, result, slot, transcript_text, live=True):
-    d = slot["designer"] if slot else "Designer pool"
+def designer_email(call_id, lead, result, slot, transcript_text, live=True, phone=None):
+    from app import mailkit
     to = slot["designer_email"] if slot else config.STUDIO_EMAIL
     if str(to).endswith("@example.com"):   # placeholder designer address: send to the studio head until real ones are set in designers.json
         to = config.STUDIO_HEAD_EMAIL
-    subj = f"Qualified: {lead.get('scope') or 'enquiry'} in {lead.get('location') or 'Pune'}, {int(lead['sqft']) if lead.get('sqft') else '?'} sq ft"
-    body = (f"ACCEPT THIS LEAD (one click): {links.url(call_id, 'accept')}\nLISTEN TO THE CALL / OPEN IN DASHBOARD: {links.url(call_id, 'listen')}\n\nGIST\n{result['gist']}\n\n"
-            f"WHO: {lead.get('name')} ({lead.get('decision_maker') or 'decision-maker not confirmed'})\n"
-            f"WANTS: {lead.get('scope')}\nWHERE: {lead.get('location')}   SIZE: {lead.get('sqft')} sq ft\nTIMELINE: {lead.get('timeline')}\n"
-            f"BUDGET: {lead.get('budget_volunteered') or 'not mentioned'}   REFERRAL: {lead.get('referral') or '-'}\n"
-            f"PRICE QUESTION: {'asked, deflected to consultation' if result.get('price_asked') else 'not asked'}\n"
-            f"BOOKED: {slot['label'] if slot else 'not yet, call the client'}\n\n"
-            f"DON'T RE-ASK: {', '.join(result.get('dont_reask') or [])}\n"
-            f"UNCERTAIN: {', '.join(result.get('uncertainties') or []) or 'nothing'}\n"
-            f"START WITH: {result.get('first_question_for_designer')}\n\nCALL ID: {call_id}\n\n--- TRANSCRIPT ---\n{transcript_text}")
-    m = EmailMessage(); m["From"] = config.STUDIO_EMAIL; m["To"] = to; m["Cc"] = config.STUDIO_HEAD_EMAIL; m["Subject"] = subj; m.set_content(body)
+    subj, body, html = mailkit.designer_email(call_id, lead, result, slot, transcript_text, phone)
+    m = EmailMessage(); m["From"] = config.STUDIO_EMAIL; m["To"] = to; m["Cc"] = config.STUDIO_HEAD_EMAIL; m["Subject"] = subj
+    m.set_content(body); m.add_alternative(html, subtype="html")
     r = _send(m, "designer", call_id, live); r.update({"to": to, "subject": subj, "body": body}); return r
 
 def cal_book(call_id, lead, slot, result):
@@ -159,26 +158,11 @@ def cal_book(call_id, lead, slot, result):
             "subject": "Aangan design consultation, " + slot["label"], "body": f"Booking {d.get('uid')} confirmed for {slot['label']}. Cal.com sent the client a confirmation with the calendar invite."}
 
 def client_message(call_id, lead, slot, result=None):
-    """The studio's own confirmation email to the client (separate from the Cal.com calendar invite). Returns (EmailMessage, body)."""
-    first = (lead.get("name") or "").split(" ")[0] or "there"
-    r = result or {}
-    when = slot["label"] if slot else None
-    bits = [x for x in (lead.get("scope"), (f"{int(lead['sqft'])} sq ft" if lead.get("sqft") else None), lead.get("location")) if x]
-    lines = [f"Hello {first},", "", "Thank you for calling Aangan Studio. It was a pleasure speaking with you.", ""]
-    if bits: lines += ["What we noted from our call:", "  Project: " + ", ".join(bits)] + ([f"  Timeline: {lead['timeline']}"] if lead.get("timeline") else []) + [""]
-    if when:
-        lines += [f"Your free design consultation: {when}" + (f" with {slot['designer']}" if slot.get("designer") else ""),
-                  "A calendar invite has been sent separately. If you cannot see it, please check your spam folder.", ""]
-    else:
-        lines += ["One of our designers will call you shortly to agree a time for your free design consultation.", ""]
-    lines += ["What to expect: your designer will listen to your ideas, look at the space and talk through the scope and approach.",
-              "Pricing depends on the site, the materials and the scope, so your designer will walk you through it in detail at the consultation.",
-              "It helps to bring floor plans or photos of the space and any inspiration you like.", "",
-              "Need a different time? Just reply to this email.", "", "Warm regards,", "Aangan Studio, Pune"]
-    body = "\n".join(lines)
-    m = EmailMessage(); m["From"] = config.STUDIO_EMAIL; m["To"] = lead.get("email") or config.STUDIO_HEAD_EMAIL
-    m["Subject"] = f"Your free design consultation with Aangan Studio" + (f", {when}" if when else "")
-    m.set_content(body)
+    """The studio's own warm confirmation email to the client (separate from the Cal.com calendar invite). Returns (EmailMessage, body)."""
+    from app import mailkit
+    subj, body, html = mailkit.client_email(lead, slot, result)
+    m = EmailMessage(); m["From"] = config.STUDIO_EMAIL; m["To"] = lead.get("email") or config.STUDIO_HEAD_EMAIL; m["Subject"] = subj
+    m.set_content(body); m.add_alternative(html, subtype="html")
     return m, body
 
 def send_client_email(call_id, lead, slot, live=True, result=None):

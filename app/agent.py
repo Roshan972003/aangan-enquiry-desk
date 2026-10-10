@@ -113,7 +113,7 @@ def finalize(transcript, started_at, duration_s, source, caller_label, call_id=N
         if slot:
             slot = dict(slot); slot.update({"designer": chosen["name"], "designer_email": chosen["email"]})
     if verdict in ("qualified",):
-        ints["designer_email"] = integ.designer_email(cid, lead, result, slot, text, live_integrations)
+        ints["designer_email"] = integ.designer_email(cid, lead, result, slot, text, live_integrations, phone)
         booking = find_booking(lead) if find_booking else None
         if booking:
             slot = booking["slot"]
