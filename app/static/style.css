@@ -194,3 +194,5 @@ a{color:#A5B4FC}[data-theme=light] a{color:var(--accent)}
 body.dm .mgr{display:none!important}
 .frow3{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 4px;border-bottom:1px solid var(--line)}.frow3>div:first-child{min-width:0;flex:1 1 260px}
 #viewas{max-width:210px}
+
+:root:not([data-theme="light"]) #map .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.92) contrast(.9) saturate(.7)}

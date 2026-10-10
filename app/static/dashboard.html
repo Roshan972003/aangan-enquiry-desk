@@ -133,7 +133,7 @@ function renderMap(s){
   const el=$('map');if(!el||typeof L==='undefined'){if(el)el.innerHTML='<p class="muted" style="padding:14px">The map could not load (no internet to the map service).</p>';return}
   const dark=document.documentElement.dataset.theme!=='light';
   if(!lmap){lmap=L.map('map',{scrollWheelZoom:false}).setView([18.55,73.85],11);lmarkers=L.layerGroup().addTo(lmap);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/'+(dark?'dark_all':'light_all')+'/{z}/{x}/{y}{r}.png',{maxZoom:18,attribution:'&copy; OpenStreetMap contributors &copy; CARTO'}).addTo(lmap)}
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'&copy; OpenStreetMap contributors'}).addTo(lmap)}
   lmarkers.clearLayers();const pts=s.map||[];
   pts.forEach(m=>{const c=STAGE_COL[m.stage]||'#6366F1';
     const mk=L.circleMarker([m.lat,m.lng],{radius:8+Math.round((m.win||25)/20),color:c,fillColor:c,fillOpacity:.55,weight:2}).addTo(lmarkers);
