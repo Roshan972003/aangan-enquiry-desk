@@ -119,6 +119,61 @@ def _top(counter, n=8):
     if len(items) <= n: return items
     return items[:n - 1] + [("Other", sum(v for _, v in items[n - 1:]))]
 
+# Approximate area centres (lat, lng) for the map. Leads in an unknown area are listed as "not placed".
+COORDS = {"kothrud": (18.5074, 73.8077), "baner": (18.5590, 73.7868), "aundh": (18.5580, 73.8075), "wakad": (18.5975, 73.7603),
+          "koregaon park": (18.5362, 73.8940), "kalyani nagar": (18.5463, 73.9038), "viman nagar": (18.5679, 73.9143), "hadapsar": (18.5089, 73.9259),
+          "magarpatta": (18.5130, 73.9290), "nibm": (18.4720, 73.8970), "kondhwa": (18.4650, 73.8930), "undri": (18.4600, 73.9120),
+          "shivane": (18.4650, 73.7900), "warje": (18.4800, 73.8000), "erandwane": (18.5080, 73.8300), "deccan": (18.5160, 73.8410),
+          "pimpri": (18.6279, 73.8009), "chinchwad": (18.6450, 73.7870), "pimpri chinchwad": (18.6298, 73.7997), "pimple saudagar": (18.6080, 73.7990),
+          "pimple nilakh": (18.5900, 73.7900), "ravet": (18.6480, 73.7370), "hinjewadi": (18.5912, 73.7389), "pashan": (18.5365, 73.7900),
+          "kharadi": (18.5515, 73.9400), "nanded": (18.4560, 73.8030), "central pune": (18.5204, 73.8567), "pune": (18.5204, 73.8567)}
+
+def coords_of(area):
+    a = str(area or "").lower()
+    if a in COORDS: return COORDS[a]
+    for k, v in COORDS.items():
+        if k in a: return v
+    return None
+
+REASONS = [("service_area", "Outside Pune and PCMC"), ("real_project", "Not a full design project"), ("budget", "Budget too low for the scope"),
+           ("timeline", "Timeline too tight"), ("decision_maker", "Not the decision-maker")]
+
+def lost_reason(c):
+    """One main reason a call did not become a lead: the first failed criterion, else a keyword in the decline reason."""
+    r = c.get("result") or {}
+    fails = {x["id"] for x in (r.get("criteria") or []) if x.get("status") == "fail"}
+    for k, label in REASONS:
+        if k in fails: return label
+    t = str(r.get("decline_reason") or "").lower()
+    if re.search(r"minimum|threshold|too small|below", t): return "Below minimum project size"
+    if re.search(r"restaurant|hotel|retail|hospitality|gym|advis", t): return "Out of scope (type of work)"
+    if re.search(r"nashik|mumbai|outside|city|area", t): return "Outside Pune and PCMC"
+    return "Other"
+
+def returning_map(calls):
+    """For each call id, how many earlier calls came from the same phone number or email (web and label-only callers never match)."""
+    seen, out = {}, {}
+    for c in sorted(calls, key=lambda x: x["started_at"]):
+        keys = []
+        ph = str(c.get("caller_label") or "")
+        if sum(ch.isdigit() for ch in ph) >= 7: keys.append("p:" + re.sub(r"\D", "", ph)[-10:])
+        em = str((c.get("lead") or {}).get("email") or "").lower()
+        if em: keys.append("e:" + em)
+        prior = max([seen.get(k, 0) for k in keys] or [0])
+        out[c["id"]] = prior
+        for k in keys: seen[k] = seen.get(k, 0) + 1
+    return out
+
+def _heat(calls, ev):
+    """Weekday x hour grids of all calls and of qualified calls."""
+    from datetime import datetime as _dt
+    allg = [[0] * 24 for _ in range(7)]; qg = [[0] * 24 for _ in range(7)]
+    for c in calls:
+        d = _dt.fromisoformat(c["started_at"])
+        allg[d.weekday()][d.hour] += 1
+        if ev[c["id"]] == "qualified": qg[d.weekday()][d.hour] += 1
+    return {"all": allg, "qualified": qg}
+
 def compute():
     """Cached for 60 s so dashboard views do not wake the database each time."""
     if _CACHE["v"] is not None and time.time() - _CACHE["t"] < 60:
@@ -171,6 +226,19 @@ def _compute():
         if ev[c["id"]] in ("qualified", "declined", "not_now") and (c.get("lead") or {}):
             types[prop_type(c["lead"])] += 1
             areas[area_of(c["lead"])] += 1
+    # map, lost pipeline, returning callers
+    map_pts, unplaced = [], 0
+    for c in q_calls:
+        lead = c.get("lead") or {}; ll = coords_of(area_of(lead))
+        if not ll: unplaced += 1; continue
+        w = win_chance(c)[0]
+        # nudge pins in the same area apart so they do not hide each other
+        k = sum(1 for m in map_pts if m["area"] == area_of(lead))
+        map_pts.append({"id": c["id"], "name": lead.get("name") or c["caller_label"], "area": area_of(lead), "lat": ll[0] + 0.004 * ((k % 3) - 1), "lng": ll[1] + 0.004 * ((k // 3) % 3 - 1),
+                        "stage": stage_of(c), "win": w, "sqft": lead.get("sqft"), "type": prop_type(lead), "designer": (c.get("ops") or {}).get("assigned_to")})
+    lostc = Counter(lost_reason(c) for c in calls if ev[c["id"]] in ("declined", "not_now"))
+    lost = lostc.most_common()
+    ret = returning_map(calls)
     # money
     lo, hi = st["project_low_lakh"], st["project_high_lakh"]
     mid = (lo + hi) / 2
@@ -254,6 +322,8 @@ def _compute():
         "days": [{"date": k, **v} for k, v in sorted(days.items())], "hours": hours,
         "types": _top(types), "areas": _top(areas),
         "kanban": {key: [lead_card(c) for c in q_calls if stage_of(c) == key] for key, _ in STAGES},
+        "map": map_pts, "unplaced": unplaced,
+        "lost": lost, "lost_total": sum(v for _, v in lost), "heat": _heat(calls, ev), "returning": ret,
         "stages": STAGES, "moods": dict(moods), "escalations": escal, "offhour": offhour, "workload": workload(calls), "red_flags": flags, "forecast": forecast, "today": today,
         "tokens_per_day": [{"date": k, "tokens": t} for k, t in sorted(tok_day.items())],
         "designers": [d["name"] for d in config.DESIGNERS],

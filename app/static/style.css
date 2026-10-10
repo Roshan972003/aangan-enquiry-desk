@@ -187,3 +187,6 @@ a{color:#A5B4FC}[data-theme=light] a{color:var(--accent)}
 .lead .tag{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;box-sizing:border-box}
 
 .feed{max-height:560px;overflow-y:auto}
+
+#lost .r{grid-template-columns:170px minmax(0,1fr) 62px}
+#map .leaflet-popup-content button{padding:5px 10px}

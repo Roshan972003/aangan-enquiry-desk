@@ -1,6 +1,8 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Aangan Enquiry Desk</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="/static/theme.js"></script>
 <link rel="stylesheet" href="/static/style.css"></head><body>
 <div class="nav"><b>Aangan Enquiry Desk</b><a class="on" href="/">Dashboard</a><a href="/simulator">Call simulator</a><button class="ghost" id="refresh" style="padding:5px 10px">Refresh</button></div>
@@ -43,6 +45,11 @@
     <div class="card"><h3>Property types</h3><div class="bars" id="types"></div></div>
     <div class="card"><h3>Location hotspots</h3><div class="bars" id="areas"></div></div>
     <div class="card"><h3>Calls per day</h3><p class="hint">Grey: all calls. Green: qualified.</p><div id="days"></div></div>
+  </div>
+  <div class="card"><h3>Map of qualified leads, Pune and PCMC</h3><p class="hint">Every qualified lead placed by area. Colour shows its pipeline stage; click a pin to see the lead and open it. Pins in the same area are spread slightly so none hide.</p><div id="map" style="height:380px;border-radius:12px;overflow:hidden"></div><div id="maplegend" class="hint" style="margin-top:8px"></div></div>
+  <div class="two">
+    <div class="card"><h3>Why leads were lost</h3><p class="hint">The main reason each declined or deferred call did not become a lead.</p><div class="bars" id="lost"></div></div>
+    <div class="card"><h3>When enquiries arrive and convert</h3><p class="hint">Weekday by hour (IST). Darker means more calls; a green ring marks hours where calls qualified. Hover for the numbers.</p><div id="heat"></div></div>
   </div>
   <div class="two">
     <div class="card"><h3>Voice system and guardrails</h3><div id="guard"></div></div>
@@ -98,6 +105,30 @@ function tick(){const now=Date.now();document.querySelectorAll('.lvt').forEach(e
 setInterval(tick,1000);
 function winTag(c){return `<span class="tag win" title="${esc((c.win_why||[]).join(' · '))}">win ${c.win}%</span>`}
 function touchTag(c){if(c.first_touch)return '<span class="tag ok">Contacted</span>';const age=Date.now()/1000-c.ended_ts;return age<86400?`<span class="cd tag" data-end="${c.ended_ts}"></span> <button class="ghost tg" data-touch="${c.id}">Mark contacted</button>`:''}
+let lmap=null,lmarkers=null;
+const STAGE_COL={qualified:'#6366F1',consultation_booked:'#10B981',site_visit:'#F59E0B',closed_won:'#22D3EE'};
+function renderMap(s){
+  const el=$('map');if(!el||typeof L==='undefined'){if(el)el.innerHTML='<p class="muted" style="padding:14px">The map could not load (no internet to the map service).</p>';return}
+  const dark=document.documentElement.dataset.theme!=='light';
+  if(!lmap){lmap=L.map('map',{scrollWheelZoom:false}).setView([18.55,73.85],11);lmarkers=L.layerGroup().addTo(lmap);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/'+(dark?'dark_all':'light_all')+'/{z}/{x}/{y}{r}.png',{maxZoom:18,attribution:'&copy; OpenStreetMap contributors &copy; CARTO'}).addTo(lmap)}
+  lmarkers.clearLayers();const pts=s.map||[];
+  pts.forEach(m=>{const c=STAGE_COL[m.stage]||'#6366F1';
+    const mk=L.circleMarker([m.lat,m.lng],{radius:8+Math.round((m.win||25)/20),color:c,fillColor:c,fillOpacity:.55,weight:2}).addTo(lmarkers);
+    const box=document.createElement('div');box.innerHTML=`<b>${esc(m.name)}</b><br>${esc(m.type)} · ${esc(m.area)}${m.sqft?' · '+m.sqft+' sq ft':''}<br>Stage: ${esc((s.stages.find(x=>x[0]===m.stage)||[0,m.stage])[1])} · win ${m.win}%<br>${m.designer?esc(m.designer):'Unassigned'}<br>`;
+    const b=document.createElement('button');b.textContent='Open lead';b.style.marginTop='6px';b.onclick=()=>openCall(m.id);box.appendChild(b);mk.bindPopup(box)});
+  if(pts.length)lmap.fitBounds(pts.map(m=>[m.lat,m.lng]),{padding:[40,40],maxZoom:13});
+  setTimeout(()=>lmap.invalidateSize(),200);
+  $('maplegend').innerHTML=s.stages.map(([k,l])=>`<span style="margin-right:14px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${STAGE_COL[k]};margin-right:5px"></span>${esc(l)}</span>`).join('')+`<span>${pts.length} lead${pts.length==1?'':'s'} placed${s.unplaced?', '+s.unplaced+' without a known area':''}. Bigger pin means higher win chance.</span>`}
+function renderInsights(){
+  const s=S;renderMap(s);
+  const lm=Math.max(1,...(s.lost||[]).map(a=>a[1]));
+  $('lost').innerHTML=(s.lost||[]).length?s.lost.map(([l,n])=>`<div class="r"><span>${esc(l)}</span><div class="b"><i style="width:${100*n/lm}%"></i></div><span class="mono" style="text-align:right">${n} · ${Math.round(100*n/s.lost_total)}%</span></div>`).join(''):'<p class="muted">No declined or deferred calls yet.</p>';
+  const H=s.heat,days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];let mx=1;H.all.forEach(r=>r.forEach(v=>mx=Math.max(mx,v)));
+  let best=null;H.all.forEach((r,di)=>r.forEach((v,h)=>{if(!best||v>best.v)best={v,di,h}}));
+  $('heat').innerHTML=`<div style="display:grid;grid-template-columns:34px repeat(24,minmax(0,1fr));gap:2px;font-size:10px;align-items:center"><span></span>${[...Array(24).keys()].map(h=>`<span class="muted" style="text-align:center">${h%3?'':h}</span>`).join('')}`+
+    H.all.map((r,di)=>`<span class="muted">${days[di]}</span>`+r.map((v,h)=>{const q=H.qualified[di][h],off=h<10||h>=19;return `<span title="${days[di]} ${String(h).padStart(2,'0')}:00 · ${v} call${v==1?'':'s'}, ${q} qualified${v?' ('+Math.round(100*q/v)+'%)':''}${off?' · outside desk hours':''}" style="aspect-ratio:1;border-radius:3px;background:${v?`rgba(99,102,241,${.15+.85*v/mx})`:'rgba(148,163,184,.10)'};${q?'box-shadow:0 0 0 1.5px #10B981 inset;':''}"></span>`}).join('')).join('')+`</div>`+
+    (best&&best.v?`<p class="hint" style="margin-top:8px">Busiest slot: ${days[best.di]} around ${String(best.h).padStart(2,'0')}:00 (${best.v} call${best.v==1?'':'s'}).</p>`:'<p class="muted">Not enough data yet.</p>')}
 function render(){
   const s=S;$('empty').hidden=s.calls>0;
   const d=s.days.slice(-30),acc='var(--accent)',gold='var(--gold)';
@@ -126,7 +157,7 @@ function render(){
   $('filters').innerHTML=fl.map(([k,l])=>`<button class="chipb" data-f="${k}" aria-pressed="${filter===k}">${l}${k==='all'?'':' '+(s.verdicts[k]||0)}</button>`).join('');
   document.querySelectorAll('#filters button').forEach(b=>b.onclick=()=>{filter=b.dataset.f;render()});
   const rows=s.recent.filter(r=>filter==='all'||r.verdict===filter);
-  $('feed').innerHTML=rows.length?rows.slice(0,200).map(r=>`<div class="frow2" data-id="${r.id}"><span class="t">${ago(r.started_at)}</span><span><b>${esc(r.name||r.caller)}</b>${r.in_hours?'':' <span class="tag warn">after hours</span>'}</span><span><span class="pill p-${r.verdict}">${VL[r.verdict]||r.verdict}</span> ${sentTag(r.sentiment_score,r.sentiment)} ${moodTag(r.mood)}${r.overridden?' <span class="tag">edited</span>':''}</span><span class="g">${esc(r.gist)}</span><span class="sp2"><span class="tag ${(r.answer_s||0)<=300?'ok':'bad'}">${secs(r.answer_s)}</span>${r.price_asked?' <span class="tag">price asked</span>':''}</span></div>`).join(''):'<p class="muted" style="padding:12px 4px">Nothing in this view yet.</p>';
+  $('feed').innerHTML=rows.length?rows.slice(0,200).map(r=>`<div class="frow2" data-id="${r.id}"><span class="t">${ago(r.started_at)}</span><span><b>${esc(r.name||r.caller)}</b>${(S.returning||{})[r.id]?` <span class="tag good" title="${S.returning[r.id]} earlier call(s) from the same number or email">returning caller</span>`:''}${r.in_hours?'':' <span class="tag warn">after hours</span>'}</span><span><span class="pill p-${r.verdict}">${VL[r.verdict]||r.verdict}</span> ${sentTag(r.sentiment_score,r.sentiment)} ${moodTag(r.mood)}${r.overridden?' <span class="tag">edited</span>':''}</span><span class="g">${esc(r.gist)}</span><span class="sp2"><span class="tag ${(r.answer_s||0)<=300?'ok':'bad'}">${secs(r.answer_s)}</span>${r.price_asked?' <span class="tag">price asked</span>':''}</span></div>`).join(''):'<p class="muted" style="padding:12px 4px">Nothing in this view yet.</p>';
   document.querySelectorAll('.frow2').forEach(e=>e.onclick=()=>openCall(e.dataset.id));
   // speed
   const rs=s.recent.map(r=>r.answer_s).filter(x=>x!=null),b1=rs.filter(x=>x<=60).length,b2=rs.filter(x=>x>60&&x<=300).length,b3=rs.filter(x=>x>300).length,tot=Math.max(rs.length,1);
@@ -184,7 +215,7 @@ function render(){
 }
 async function load(force){
   if(force){await fetch('/api/stats?t='+Date.now())}
-  S=await (await fetch('/api/stats')).json();render();loadBrief(false);
+  S=await (await fetch('/api/stats')).json();render();try{renderInsights()}catch(e){console.error(e)}loadBrief(false);
 }
 const BSEC=['Snapshot','Wins','Risks','Lost leads','Actions','Outlook'];
 let briefParts=null,briefMeta=null;
