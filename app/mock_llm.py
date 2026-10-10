@@ -8,7 +8,11 @@ def _caller_text(history):
     return " ".join(h["text"] for h in history if h["role"] == "user").lower()
 
 def respond(system, history, schema):
+    if schema is None:
+        return "Headline: MOCK digest for plumbing tests.\nWins:\n- Calls answered quickly.\nLost leads:\n- Out-of-area enquiries declined.\nActions:\n- Call back the escalation."
     props = (schema or {}).get("properties", {})
+    if "matches" in props:
+        return {"matches": []}
     if "verdict" in props:
         return _final(history)
     users = [h for h in history if h["role"] == "user"]

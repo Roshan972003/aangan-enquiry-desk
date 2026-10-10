@@ -73,7 +73,7 @@ def turn(cid, text):
     return out["reply"], sess["status"], sess["lead"]
 
 def finalize(transcript, started_at, duration_s, source, caller_label, call_id=None, phone=None, slot_choice=0, slots=None,
-             usage=None, ring_to_answer_s=3.0, live_integrations=True, price_hint=None, missed=False, find_booking=None):
+             usage=None, ring_to_answer_s=3.0, live_integrations=True, price_hint=None, missed=False, find_booking=None, external_id=None):
     """Post-call pipeline: judge the call, write the gist, sync HubSpot, send email and invite."""
     cid = call_id or "C" + uuid.uuid4().hex[:8].upper()
     usage = dict(usage or {"in": 0, "out": 0})
@@ -112,7 +112,7 @@ def finalize(transcript, started_at, duration_s, source, caller_label, call_id=N
     rec = {"id": cid, "started_at": started_at.isoformat(), "source": source, "caller_label": caller_label,
            "ring_to_answer_s": ring_to_answer_s, "in_hours": int(in_hours(started_at)), "duration_s": duration_s, "missed": int(verdict == "missed"),
            "transcript": transcript, "lead": lead, "result": result, "verdict": verdict, "gist": result["gist"],
-           "cost": cost, "cost_inr": total, "integrations": ints, "slot": slot}
+           "cost": cost, "cost_inr": total, "integrations": ints, "slot": slot, "external_id": external_id}
     db.save_call(rec)
     return rec
 

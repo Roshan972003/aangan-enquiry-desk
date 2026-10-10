@@ -4,5 +4,11 @@
       "maxDuration": 60,
       "includeFiles": "{app/static/**,knowledge/**,designers.json}"
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/weekly",
+      "schedule": "30 12 * * 0"
+    }
+  ]
 }

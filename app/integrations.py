@@ -142,3 +142,35 @@ def decline_email(call_id, lead, live=True):
     m = EmailMessage(); m["From"] = config.STUDIO_EMAIL; m["To"] = lead["email"]; m["Subject"] = "Thank you for calling Aangan Studio"
     body = "Thank you for calling. This may not be the right fit for us right now, but please reach out if your scope or timeline changes.\n\nAangan Studio"
     m.set_content(body); r = _send(m, "decline", call_id, live); r.update({"to": lead["email"], "subject": m["Subject"], "body": body}); return r
+
+
+def telegram_send(text):
+    """Optional: needs TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID. Returns (ok, message)."""
+    if not (config.TELEGRAM_BOT_TOKEN and config.TELEGRAM_CHAT_ID):
+        return False, "Telegram is not set up. Add TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID to the environment."
+    try:
+        r = httpx.post(f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage", timeout=20,
+                       json={"chat_id": config.TELEGRAM_CHAT_ID, "text": text})
+        r.raise_for_status()
+        return True, "Sent to Telegram"
+    except httpx.HTTPError as e:
+        return False, "Telegram failed: " + str(e).replace(config.TELEGRAM_BOT_TOKEN, "***")[:120]
+
+
+def hubspot_move_stage(deal_id, stage_key):
+    """Keep the HubSpot deal stage in step with the dashboard board. Best effort."""
+    if not (deal_id and config.HUBSPOT_TOKEN):
+        return "no HubSpot deal"
+    want = {"qualified": "Initial Consultation", "consultation_scheduled": "Initial Consultation", "proposal_sent": "Proposal Sent", "closed_won": "Closed Won"}[stage_key]
+    h = {"Authorization": f"Bearer {config.HUBSPOT_TOKEN}", "Content-Type": "application/json"}
+    try:
+        with httpx.Client(timeout=20, headers=h) as c:
+            r = c.get(f"{HS}/crm/v3/pipelines/deals"); r.raise_for_status()
+            p = next((x for x in r.json()["results"] if x["id"] == "default"), r.json()["results"][0])
+            st = next((x for x in p["stages"] if x["label"].lower() == want.lower()), None)
+            if not st:
+                return "stage not found in HubSpot"
+            c.patch(f"{HS}/crm/v3/objects/deals/{deal_id}", json={"properties": {"dealstage": st["id"]}}).raise_for_status()
+        return "HubSpot deal moved to " + want
+    except httpx.HTTPError as e:
+        return "HubSpot not updated: " + str(e)[:80]

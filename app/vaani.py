@@ -112,7 +112,7 @@ def _process(call_id, transcript, started, duration_s, phone, summary_hint=None)
         v, _ = db.kv_get("vaani_booking:" + e) if e else (None, None)
         return v
     rec = agent.finalize(transcript, started, duration_s, "vaani", str(phone or "Vaani caller"), call_id=cid, phone=phone,
-                         ring_to_answer_s=2.0, find_booking=find_booking, missed=not transcript)
+                         ring_to_answer_s=2.0, find_booking=find_booking, missed=not transcript, external_id=str(call_id))
     return rec["id"], rec["verdict"]
 
 @router.post("/webhook")
@@ -120,6 +120,7 @@ async def post_call(request: Request):
     """Vaani webhook. Only the call_postprocessing event carries the transcript, so the others are acknowledged and ignored."""
     b = await _body(request)
     event = b.get("event")
+    db.kv_set("webhook_last", {"event": event, "at": datetime.now().isoformat(timespec="seconds")}, datetime.now().isoformat(timespec="seconds"))
     if event and event != "call_postprocessing":
         return {"ok": True, "ignored": event}
     data = b.get("data") if isinstance(b.get("data"), dict) else b
@@ -162,7 +163,8 @@ async def sync_from_vaani(request: Request, limit: int = 20):
     done = []
     with httpx.Client(timeout=30, headers=h) as c:
         r = c.get(f"{VAANI_API}/call-history", params={"page": 1, "page_size": min(limit, 50)})
-        r.raise_for_status()
+        if r.status_code != 200:
+            return {"ok": False, "error": "Vaani call history is unavailable for this account (" + r.text[:140] + "). The webhook still works."}
         for item in r.json().get("data", []):
             if "aangan" not in str(item.get("agent_name", "")).lower():
                 continue

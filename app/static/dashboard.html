@@ -1,59 +1,194 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Aangan Enquiry Desk</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<script src="/static/theme.js"></script>
 <link rel="stylesheet" href="/static/style.css"></head><body>
 <div class="nav"><b>Aangan Enquiry Desk</b><a class="on" href="/">Dashboard</a><a href="/simulator">Call simulator</a><button class="ghost" id="refresh" style="padding:5px 10px">Refresh</button></div>
 <div class="wrap">
-  <div><div class="eyebrow">Phone channel · live from the call log</div><h2 style="font-size:26px;margin-top:4px">What came in, how fast, what it cost</h2></div>
-  <div id="empty" class="card" hidden>No calls yet. Run a call in the <a href="/simulator">simulator</a>, or load the September transcripts with <span class="mono">python replay.py</span>.</div>
-  <div class="grid g4" id="kpis"></div>
-  <div class="card" style="border-color:var(--gold)"><div style="display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap"><h3>The gist <span class="pill" style="background:var(--gold-soft);color:var(--warn)">Gemini</span></h3><span class="hint" id="brief-when"></span><button id="brief-btn" class="ghost">Refresh brief</button></div><div id="brief" style="margin-top:8px;white-space:pre-line">No brief yet.</div></div>
-  <div class="grid g2"><div class="card"><h3>Calls per day</h3><p class="hint">Grey: all calls. Purple: qualified and sent to a designer.</p><div id="days"></div></div>
-  <div class="card"><h3>Outcomes</h3><div class="funnel" id="funnel"></div></div></div>
-  <div class="grid g3"><div class="card"><h3>When calls arrive</h3><p class="hint">Gold hours are outside the front desk's 10am to 7pm.</p><div id="hours"></div></div>
-  <div class="card"><h3>Cost to run</h3><p class="hint">Estimated from token usage and the rates in .env.</p><div id="costs"></div></div>
-  <div class="card"><h3>Connections</h3><div id="conn" style="display:flex;flex-direction:column;gap:8px"></div></div></div>
-  <div class="card"><h3 style="margin-bottom:8px">Recent calls</h3><div class="tablewrap"><table><thead><tr><th>Time</th><th>Caller</th><th>Verdict</th><th>Gist</th><th>Answered in</th><th>HubSpot</th><th>Designer</th><th>Invite</th><th>Cost</th></tr></thead><tbody id="rows"></tbody></table></div></div>
+  <div style="display:flex;justify-content:space-between;align-items:end;gap:12px;flex-wrap:wrap"><div><div class="eyebrow">Phone channel · live from the call log</div><h2 style="font-size:26px;margin-top:4px">Founder's view</h2></div><div class="actions" style="margin:0"><span class="hint">Your name for the audit log</span><input id="actor" style="width:130px" placeholder="e.g. Nikhil"><a class="btn ghost" href="/api/export.csv" download>Export CSV</a><a class="btn ghost" href="/api/export.pdf" download>Export PDF</a></div></div>
+  <div id="empty" class="card" hidden>No calls yet. Make one in the <a href="/simulator">simulator</a> or a Vaani web call, or load the September transcripts with <span class="mono">python replay.py</span>.</div>
+
+  <!-- executive summary -->
+  <div class="card digest" style="border-color:var(--gold)">
+    <div style="display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap"><h3>Today's brief <span class="pill" style="background:var(--gold-soft);color:var(--warn)">Gemini</span></h3><span class="hint" id="brief-when"></span><button id="brief-btn" class="ghost">Write today's brief</button></div>
+    <div id="brief" style="margin-top:6px"><span class="muted">No brief yet.</span></div>
+  </div>
+
+  <div class="card"><h3>Search every call</h3><p class="hint">Ask in plain English, for example "clients asking for 4BHK in Baner" or "calls where the client complained about timeline".</p><div class="actions"><input id="q" style="flex:1;min-width:200px" placeholder="Search calls and transcripts"><button id="q-go">Search</button></div><div id="q-out"></div></div>
+
+  <!-- glanceable KPIs -->
+  <div class="grid g3" id="kpis"></div>
+
+  <!-- feed + speed -->
+  <div class="grid g2">
+    <div class="card"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center"><h3>Enquiry feed</h3><div class="chips" id="filters"></div></div><div class="feed" id="feed" style="margin-top:6px"></div></div>
+    <div class="card"><h3>Conversion speed</h3><p class="hint">Target: every enquiry answered within 5 minutes, day or night.</p><div id="speed"></div></div>
+  </div>
+
+  <!-- escalations -->
+  <div class="card red" id="esc-card" hidden><h3>Red flags</h3><p class="hint">Escalations, unhappy callers, missed calls and qualified leads nobody has picked up. Callbacks promised on the call: within 15 minutes.</p><div class="esc" id="esc"></div></div>
+
+  <!-- kanban -->
+  <div class="card"><h3>Lead pipeline</h3><p class="hint">Drag a card, or use the arrows. Booked consultations start in "Site visit scheduled".</p><div class="kan" id="kanban" style="margin-top:8px"></div></div>
+
+  <!-- quality + volume -->
+  <div class="grid g3">
+    <div class="card"><h3>Property types</h3><div class="bars" id="types"></div></div>
+    <div class="card"><h3>Location hotspots</h3><div class="bars" id="areas"></div></div>
+    <div class="card"><h3>Calls per day</h3><p class="hint">Grey: all calls. Green: qualified.</p><div id="days"></div></div>
+  </div>
+
+  <!-- guardrails + ROI -->
+  <div class="two">
+    <div class="card"><h3>Voice system and guardrails</h3><div id="guard"></div></div>
+    <div class="card"><h3>Return and running cost</h3><div id="roi"></div></div>
+  </div>
+  <div class="two">
+    <div class="card"><h3>Month-end forecast</h3><div id="fc"></div></div>
+    <div class="card"><h3>System health</h3><div id="sys"><p class="muted">Press "Check now" to test each connection.</p></div><div class="actions"><button class="ghost" id="sys-go">Check now</button></div><div id="tok"></div></div>
+  </div>
+  <div class="grid g3">
+    <div class="card"><h3>When calls arrive</h3><p class="hint">Gold hours are outside the desk's 10am to 7pm.</p><div id="hours"></div></div>
+    <div class="card"><h3>Connections</h3><div id="conn" style="display:flex;flex-direction:column;gap:8px"></div></div>
+    <div class="card"><h3>Assumptions</h3><p class="hint">These drive the ROI and time-saved numbers. Change them to match your own figures.</p><div class="asm" id="asm"></div></div>
+  </div>
 </div>
 <div class="drawer" id="drawer" hidden></div>
+<div class="toast" id="toast" hidden></div>
 <script>
-const $=id=>document.getElementById(id), inr=x=>'₹'+(+x).toLocaleString('en-IN',{maximumFractionDigits:2});
-const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-const mode=m=>m==='live'?'<span class="ok">Live</span>':m==='outbox'?'<span class="muted">Saved locally</span>':m==='skipped'||!m?'<span class="no">None</span>':'<span style="color:var(--bad)">Error</span>';
-async function load(){
-  const s=await (await fetch('/api/stats')).json();
-  $('empty').hidden=s.calls>0;
-  const k=[['Calls handled',s.calls,`${s.missed} missed, AI callback queued`],['Median time to answer',s.median_answer_s==null?'-':s.median_answer_s+' s',(s.within_5_min_pct??'-')+'% within 5 minutes'],
-   ['Sent to designers',s.qualified,s.calls?Math.round(100*s.qualified/s.calls)+'% of calls':''],['Calendar invites',s.invites,'client invites created'],
-   ['After-hours calls',s.after_hours,'outside 10am to 7pm, all answered'],['Price questions deflected',s.price_asked,'no price figures given'],
-   ['Run cost',inr(s.cost_total_inr),inr(s.cost_per_call_inr)+' per call'],['Cost per qualified lead',s.cost_per_qualified_inr==null?'-':inr(s.cost_per_qualified_inr),'≈ ₹'+s.pipeline_lakh+' L project value at ₹11 L average']];
-  $('kpis').innerHTML=k.map((x,i)=>`<div class="card kpi ${i>5?'cost':''}"><span class="l">${x[0]}</span><span class="v">${x[1]}</span><span class="s">${x[2]}</span></div>`).join('');
-  // days
-  const d=s.days.slice(-30),W=620,H=170,mx=Math.max(1,...d.map(x=>x.calls))+1,bw=(W-24)/Math.max(d.length,1);let g='';
-  d.forEach((x,i)=>{const bx=24+i*bw+bw*.15,w=bw*.7,h=(H-24)*x.calls/mx,q=(H-24)*x.qualified/mx;
-   g+=`<rect x="${bx}" y="${H-18-h}" width="${w}" height="${h}" rx="2" fill="var(--surface2)"/><rect x="${bx}" y="${H-18-q}" width="${w}" height="${q}" rx="2" fill="var(--accent)"/>`;
-   if(d.length<12||i%3==0)g+=`<text x="${bx+w/2}" y="${H-4}" text-anchor="middle">${x.date.slice(8)}</text>`});
-  g+=`<text x="0" y="12">${mx-1}</text><text x="0" y="${H-18}">0</text>`;
-  $('days').innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Calls per day">${g}</svg>`;
-  const v=s.verdicts,tot=Math.max(s.calls,1);
-  $('funnel').innerHTML=[['Qualified','qualified'],['Declined','declined'],['Not now','not_now'],['Escalated','escalate'],['Missed','missed']].map(([l,key])=>`<div class="r"><span>${l}</span><div class="b"><i style="width:${100*(v[key]||0)/tot}%"></i></div><span class="mono" style="text-align:right">${v[key]||0}</span></div>`).join('');
-  const hm=Math.max(1,...s.hours);let hg='';s.hours.forEach((n,h)=>{const bh=110*n/hm,ooh=h<10||h>=19;hg+=`<rect x="${h*12.5+1}" y="${125-bh}" width="10.5" height="${bh}" rx="1.5" fill="${ooh?'var(--gold)':'var(--accent)'}"/>`;if(h%6==0)hg+=`<text x="${h*12.5}" y="140">${h}h</text>`});
-  $('hours').innerHTML=`<svg viewBox="0 0 300 146" width="100%" role="img" aria-label="Calls by hour">${hg}</svg>`;
+const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const inr=x=>'₹'+(+x).toLocaleString('en-IN',{maximumFractionDigits:2}),lakh=x=>x>=100?(x/100).toFixed(1)+' Cr':(+x).toLocaleString('en-IN',{maximumFractionDigits:1})+' L';
+const xfmt=n=>n==null?'-':n>=1000?(n/1000).toFixed(1)+'K×':n+'×';
+const VL={qualified:'Qualified',declined:'Declined',not_now:'Not now',escalate:'Escalated',missed:'Missed',review:'Review'};
+let S=null,filter='all',cur=null;
+function toast(t){const e=$('toast');e.textContent=t;e.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>e.hidden=true,3200)}
+function actor(){try{return localStorage.getItem('aangan-actor')||''}catch(e){return ''}}
+async function post(url,body){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-Actor':actor()||'dashboard user'},body:JSON.stringify(body||{})});const j=await r.json().catch(()=>({}));if(!r.ok&&!j.message)throw new Error(j.detail||j.error||r.status);return j}
+function level(v,g,y){return v==null?'y':v>=g?'g':v>=y?'y':'r'}
+function spark(vals,col){if(!vals||vals.length<2)return '';const w=120,h=26,p=3,mx=Math.max(...vals),mn=Math.min(...vals),pts=vals.map((v,i)=>[p+i*(w-2*p)/(vals.length-1),h-p-(v-mn)/((mx-mn)||1)*(h-2*p)]);const d=pts.map((q,i)=>(i?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1)).join(' '),l=pts[pts.length-1];
+ return `<svg class="sp" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><path d="${d} L${l[0]} ${h} L${pts[0][0]} ${h}Z" fill="${col}" opacity=".14"/><path d="${d}" fill="none" stroke="${col}" stroke-width="1.6"/><circle cx="${l[0]}" cy="${l[1]}" r="2.6" fill="${col}"/></svg>`}
+function ago(iso){const d=new Date(iso);return d.toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}
+function secs(s){return s==null?'-':s<60?Math.round(s)+' s':(s/60).toFixed(1)+' min'}
+
+function render(){
+  const s=S;$('empty').hidden=s.calls>0;
+  const d=s.days.slice(-30),acc='var(--accent)',gold='var(--gold)';
+  const K=[
+   ['Answered within 5 min',s.within_5_min_pct==null?'-':s.within_5_min_pct+'<small>%</small>','Median '+secs(s.median_answer_s),level(s.within_5_min_pct,95,80),spark(d.map(x=>x.within5/Math.max(x.calls,1)*100),acc)],
+   ['Handled by the AI',s.containment_pct==null?'-':s.containment_pct+'<small>%</small>',s.contained+' of '+s.calls+' calls, no desk help',level(s.containment_pct,85,70),spark(d.map(x=>x.calls),acc)],
+   ['Qualified leads',s.qualified,s.calls?Math.round(100*s.qualified/s.calls)+'% of calls':'','g',spark(d.map(x=>x.qualified),'var(--good)'),'good-k'],
+   ['Pipeline value','₹'+lakh(s.pipeline.mid_lakh),'Range ₹'+lakh(s.pipeline.low_lakh)+' to ₹'+lakh(s.pipeline.high_lakh),'g',spark(d.map(x=>x.qualified),'var(--good)'),'good-k'],
+   ['Running cost',inr(s.cost_total_inr),inr(s.cost_per_call_inr)+' per call · '+(s.cost_per_qualified_inr==null?'-':inr(s.cost_per_qualified_inr))+' per lead',level(s.cost_per_qualified_inr==null?100:100-s.cost_per_qualified_inr,60,30),spark(d.map(x=>x.cost),gold),'cost'],
+   ['Return multiple',xfmt(s.roi_expected_x),'Expected revenue ÷ cost · at '+s.settings.close_rate_pct+'% close rate','g',spark(d.map(x=>x.qualified),acc),'cost']];
+  $('kpis').innerHTML=K.map(k=>`<div class="card kpi ${k[5]||''}"><span class="l"><i class="dot ${k[3]}"></i>${k[0]}</span><span class="v">${k[1]}</span><span class="s">${k[2]}</span>${k[4]}</div>`).join('');
+  // filters + feed
+  const fl=[['all','All'],['qualified','Qualified'],['declined','Declined'],['not_now','Not now'],['escalate','Escalated'],['missed','Missed']];
+  $('filters').innerHTML=fl.map(([k,l])=>`<button class="chipb" data-f="${k}" aria-pressed="${filter===k}">${l}${k==='all'?'':' '+(s.verdicts[k]||0)}</button>`).join('');
+  document.querySelectorAll('#filters button').forEach(b=>b.onclick=()=>{filter=b.dataset.f;render()});
+  const rows=s.recent.filter(r=>filter==='all'||r.verdict===filter);
+  $('feed').innerHTML=rows.length?rows.slice(0,14).map(r=>`<div class="frow2" data-id="${r.id}"><span class="t">${ago(r.started_at)}</span><span><b>${esc(r.name||r.caller)}</b>${r.in_hours?'':' <span class="tag warn">after hours</span>'}</span><span><span class="pill p-${r.verdict}">${VL[r.verdict]||r.verdict}</span>${r.overridden?' <span class="tag">edited</span>':''}</span><span class="g">${esc(r.gist)}</span><span class="sp2"><span class="tag ${(r.answer_s||0)<=300?'ok':'bad'}">${secs(r.answer_s)}</span>${r.price_asked?' <span class="tag">price asked</span>':''}</span></div>`).join(''):'<p class="muted" style="padding:12px 4px">Nothing in this view yet.</p>';
+  document.querySelectorAll('.frow2').forEach(e=>e.onclick=()=>openCall(e.dataset.id));
+  // speed
+  const rs=s.recent.map(r=>r.answer_s).filter(x=>x!=null),b1=rs.filter(x=>x<=60).length,b2=rs.filter(x=>x>60&&x<=300).length,b3=rs.filter(x=>x>300).length,tot=Math.max(rs.length,1);
+  $('speed').innerHTML=`<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><div><div class="big">${s.within_5_min_pct==null?'-':s.within_5_min_pct+'%'}</div><div class="hint">answered within 5 minutes</div></div><div class="chips"><span class="tag ok">median ${secs(s.median_answer_s)}</span><span class="tag ${s.max_answer_s>300?'bad':'ok'}">slowest ${secs(s.max_answer_s)}</span><span class="tag warn">${s.after_hours} after hours</span><span class="tag ${s.missed?'bad':'ok'}">${s.missed} missed</span></div></div>
+   <div class="bars" style="margin-top:12px">${[['Under 1 min',b1,'var(--good)'],['1 to 5 min',b2,'var(--accent)'],['Over 5 min',b3,'var(--bad)']].map(([l,n,c])=>`<div class="r"><span>${l}</span><div class="b"><i style="width:${100*n/tot}%;background:${c}"></i></div><span class="mono" style="text-align:right">${n}</span></div>`).join('')}</div>
+   <p class="hint">Before the system, about 48% of enquiries got no reply within 48 hours.</p>`;
+  // red flags
+  const fl2=s.red_flags||[],open2=fl2.filter(f=>!f.done);
+  $('esc-card').hidden=!fl2.length;
+  $('esc').innerHTML=fl2.slice(0,12).map(e=>`<div style="${e.done?'opacity:.55':''}"><div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(e.name)}</b><span class="tag bad">${esc(e.kind)}</span></div><span class="mono muted">${esc(e.phone)} · ${ago(e.at)}</span><span style="font-size:12.5px">${esc(e.gist)}</span><div class="actions">${/\d{6,}/.test(e.phone)?`<a class="btn" href="tel:${esc(e.phone.replace(/[^+\d]/g,''))}">Call back now</a>`:''}<button data-cb="${e.id}" data-st="${e.done?'pending':'called_back'}" class="ghost" style="padding:4px 10px">${e.done?'Reopen':'Mark called back'}</button><button data-open="${e.id}" class="ghost" style="padding:4px 10px">Open call</button></div></div>`).join('');
+  document.querySelectorAll('[data-cb]').forEach(b=>b.onclick=async()=>{await post('/api/calls/'+b.dataset.cb+'/callback',{status:b.dataset.st});await load(true)});
+  document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openCall(b.dataset.open));
+  // forecast
+  const f=s.forecast;
+  $('fc').innerHTML=`<div class="two" style="gap:10px"><div><div class="hint">Qualified by month end</div><div class="big">${f.projected_qualified_month}</div><div class="hint">${f.leads_per_day} leads a day, ${f.days_left} days left</div></div><div><div class="hint">Expected revenue</div><div class="big">₹${lakh(f.projected_revenue_lakh)}</div><div class="hint">from pipeline ₹${lakh(f.projected_pipeline_lakh)}</div></div></div><div class="kvr" style="margin-top:8px"><span>Won so far</span><b>${f.won_to_date}</b></div><p class="hint">This is a simple run-rate projection (${esc(f.basis)}), not a trained model. It improves as more calls and wins are recorded.</p>`;
+  // tokens per day
+  const td=(s.tokens_per_day||[]).slice(-14);$('tok').innerHTML=td.length?`<div class="hint" style="margin-top:8px">AI token use per day (${esc((window.__model||'Gemini'))})</div>${spark(td.map(x=>x.tokens),'var(--accent)')}<div class="hint">${td[td.length-1].tokens.toLocaleString('en-IN')} tokens on the latest day</div>`:'';
+  // kanban
+  $('kanban').innerHTML=s.stages.map(([key,label],i)=>`<div class="col" data-stage="${key}"><h4><span>${label}</span><span>${s.kanban[key].length}</span></h4>${s.kanban[key].map(c=>`<div class="lead" draggable="true" data-id="${c.id}"><b>${esc(c.name)}</b><span class="m">${esc(c.type)} · ${esc(c.area)}${c.sqft?' · '+c.sqft+' sq ft':''}</span>${c.slot?`<span class="m">${esc(c.slot)}</span>`:''}<span class="m">${c.assigned_to?'Designer: '+esc(c.assigned_to):'Unassigned'}${c.overridden?' · edited':''}</span><div class="mv">${i>0?`<button class="ghost" data-mv="${c.id}" data-to="${s.stages[i-1][0]}" aria-label="Move back">←</button>`:''}${i<3?`<button class="ghost" data-mv="${c.id}" data-to="${s.stages[i+1][0]}" aria-label="Move forward">→</button>`:''}<button class="ghost" data-open="${c.id}">Open</button></div></div>`).join('')||'<span class="hint">Empty</span>'}</div>`).join('');
+  document.querySelectorAll('[data-mv]').forEach(b=>b.onclick=async e=>{e.stopPropagation();await post('/api/calls/'+b.dataset.mv+'/stage',{stage:b.dataset.to});await load(true)});
+  document.querySelectorAll('#kanban [data-open]').forEach(b=>b.onclick=e=>{e.stopPropagation();openCall(b.dataset.open)});
+  document.querySelectorAll('.lead').forEach(l=>l.ondragstart=e=>e.dataTransfer.setData('text/plain',l.dataset.id));
+  document.querySelectorAll('.col').forEach(c=>{c.ondragover=e=>{e.preventDefault();c.classList.add('over')};c.ondragleave=()=>c.classList.remove('over');c.ondrop=async e=>{e.preventDefault();c.classList.remove('over');const id=e.dataTransfer.getData('text/plain');if(id){await post('/api/calls/'+id+'/stage',{stage:c.dataset.stage});await load(true)}}});
+  // quality bars
+  const bars=(arr)=>{const m=Math.max(1,...arr.map(a=>a[1]));return arr.length?arr.map(([l,n])=>`<div class="r"><span>${esc(l)}</span><div class="b"><i style="width:${100*n/m}%"></i></div><span class="mono" style="text-align:right">${n}</span></div>`).join(''):'<p class="muted">Not enough data yet.</p>'};
+  $('types').innerHTML=bars(s.types);$('areas').innerHTML=bars(s.areas);
+  // days chart
+  const W=420,H=150,mx=Math.max(1,...d.map(x=>x.calls))+1,bw=(W-22)/Math.max(d.length,1);let g='';
+  d.forEach((x,i)=>{const bx=22+i*bw+bw*.15,w=bw*.7,h=(H-22)*x.calls/mx,q=(H-22)*x.qualified/mx;g+=`<rect x="${bx}" y="${H-16-h}" width="${w}" height="${h}" rx="2" fill="var(--surface2)"/><rect x="${bx}" y="${H-16-q}" width="${w}" height="${q}" rx="2" fill="var(--good)"/>`;if(d.length<12||i%3==0)g+=`<text x="${bx+w/2}" y="${H-3}" text-anchor="middle">${x.date.slice(8)}</text>`});
+  $('days').innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Calls per day">${g}<text x="0" y="10">${mx-1}</text></svg>`;
+  // hours
+  const hm=Math.max(1,...s.hours);let hg='';s.hours.forEach((n,h)=>{const bh=100*n/hm,ooh=h<10||h>=19;hg+=`<rect x="${h*12.5+1}" y="${112-bh}" width="10.5" height="${bh}" rx="1.5" fill="${ooh?'var(--gold)':'var(--accent)'}"/>${h%6==0?`<text x="${h*12.5}" y="126">${h}h</text>`:''}`});
+  $('hours').innerHTML=`<svg viewBox="0 0 300 130" width="100%" role="img" aria-label="Calls by hour">${hg}</svg>`;
+  // guardrails
+  const pct=s.containment_pct||0,C=2*Math.PI*46,off=C*(1-pct/100);
+  $('guard').innerHTML=`<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap"><svg class="ring" viewBox="0 0 120 120" role="img" aria-label="Containment ${pct}%"><circle cx="60" cy="60" r="46" fill="none" stroke="var(--surface2)" stroke-width="12"/><circle cx="60" cy="60" r="46" fill="none" stroke="var(--accent)" stroke-width="12" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${off}" transform="rotate(-90 60 60)"/><text x="60" y="68" text-anchor="middle">${pct}%</text></svg>
+   <div style="flex:1;min-width:200px"><b>Call containment</b><p class="hint" style="margin:2px 0 10px">Calls the AI handled start to finish with no desk help. Escalations and missed calls do not count.</p>
+   <div class="kvr"><span>Price questions</span><b>${s.price_asked}</b></div><div class="kvr"><span>Steered to the free consultation</span><b>${s.price_deflected}</b></div><div class="kvr"><span>Price figures spoken</span><span class="tag ${s.price_leaks?'bad':'ok'}">${s.price_leaks} ${s.price_leaks?'check these calls':'none'}</span></div><div class="kvr"><span>Escalations</span><b>${s.verdicts.escalate||0}</b></div></div></div>`;
+  // roi
   const c=s.cost_components,ct=Math.max(s.cost_total_inr,.01);
-  $('costs').innerHTML=[['Gemini (agent + gist)',c.gemini],['Telephony minutes',c.telephony],['Speech in and out',c.speech]].map(([l,x])=>`<div style="margin:8px 0"><div style="display:flex;justify-content:space-between"><span>${l}</span><span class="mono">${inr(x)}</span></div><div class="funnel"><div class="b" style="height:8px"><i style="width:${100*x/ct}%;background:var(--gold)"></i></div></div></div>`).join('')+`<div class="hint">Total ${inr(s.cost_total_inr)} for ${s.calls} calls.</div>`;
-  const h=await (await fetch('/api/health')).json();
-  $('conn').innerHTML=[['Gemini',h.llm],['HubSpot',h.hubspot?'connected':'not connected, saving locally'],['Email + invites',h.smtp?'connected':'not connected, saving .eml/.ics locally'],['Voice platform (Vaani)',h.vaani_key_set?'key stored, not wired yet':'no key']].map(([a,b])=>`<div style="display:flex;justify-content:space-between;gap:10px"><b>${a}</b><span class="muted" style="text-align:right">${esc(b)}</span></div>`).join('');
-  $('rows').innerHTML=s.recent.map(r=>`<tr class="row" data-id="${r.id}"><td class="mono">${new Date(r.started_at).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}${r.in_hours?'':' <span style="color:var(--gold)">after hours</span>'}</td><td>${esc(r.caller)}${r.source==='replay'?' <span class="hint">(replay)</span>':''}</td><td><span class="pill p-${r.verdict}">${r.verdict.replace('_',' ')}</span></td><td style="min-width:260px;white-space:normal;color:var(--muted)">${esc(r.gist)}</td><td class="mono">${r.answer_s??'-'} s</td><td>${mode(r.hubspot)}</td><td>${mode(r.designer_email)}</td><td>${mode(r.invite)}</td><td class="mono">${inr(r.cost_inr)}</td></tr>`).join('');
-  document.querySelectorAll('tr.row').forEach(tr=>tr.onclick=()=>openCall(tr.dataset.id));
-  const b=await (await fetch('/api/brief')).json();if(b.brief){$('brief').textContent=b.brief;$('brief-when').textContent='Updated '+b.updated_at.replace('T',' ')}
+  $('roi').innerHTML=`<div class="two" style="gap:10px"><div><div class="hint">Pipeline value</div><div class="big">₹${lakh(s.pipeline.mid_lakh)}</div><div class="hint">${s.qualified} qualified × ₹${s.settings.project_low_lakh} to ${s.settings.project_high_lakh} L</div></div><div><div class="hint">Expected revenue</div><div class="big">₹${lakh(s.pipeline.expected_lakh)}</div><div class="hint">at ${s.settings.close_rate_pct}% close rate</div></div></div>
+   <div class="kvr" style="margin-top:8px"><span>Return multiple (expected revenue ÷ cost)</span><b>${xfmt(s.roi_expected_x)}</b></div><div class="kvr"><span>Pipeline ÷ cost</span><b>${xfmt(s.roi_pipeline_x)}</b></div>
+   <div class="kvr"><span>Voice minutes used</span><b class="mono">${s.voice_minutes}</b></div><div class="kvr"><span>AI tokens</span><b class="mono">${(s.tokens_in+s.tokens_out).toLocaleString('en-IN')}</b></div><div class="kvr"><span>Cost per qualified lead</span><b>${s.cost_per_qualified_inr==null?'-':inr(s.cost_per_qualified_inr)}</b></div>
+   ${[['Gemini',c.gemini],['Telephony',c.telephony],['Speech',c.speech]].map(([l,x])=>`<div class="kvr"><span>${l}</span><span class="mono">${inr(x)} <span class="hint">(${Math.round(100*x/ct)}%)</span></span></div>`).join('')}
+   <div class="kvr" style="margin-top:6px"><span><b>Front-desk time saved</b></span><b class="big" style="font-size:20px">${s.time_saved_hours} h</b></div>
+   <p class="hint">Pipeline is potential value, not revenue. The close rate is an assumption you can change on the right.</p>`;
+  // connections
+  fetch('/api/health').then(r=>r.json()).then(h=>{$('conn').innerHTML=[['Gemini',h.llm],['HubSpot',h.hubspot?'connected':'not connected'],['Cal.com',h.cal?'connected':'not connected'],['Database',h.db],['Vaani',h.vaani_key_set?'key set':'no key'],['Telegram',s.telegram?'connected':'not set up'],['Email',h.smtp?'connected':'saved as files']].map(([a,b])=>`<div class="kvr"><b>${a}</b><span class="muted">${esc(b)}</span></div>`).join('')});
+  // assumptions
+  $('asm').innerHTML=`<label>Close rate %<input type="number" id="a-close" min="0" max="100" value="${s.settings.close_rate_pct}"></label><label>Minutes saved per call<input type="number" id="a-min" min="0" value="${s.settings.minutes_saved_per_call}"></label><label>Project low (L)<input type="number" id="a-lo" min="0" value="${s.settings.project_low_lakh}"></label><label>Project high (L)<input type="number" id="a-hi" min="0" value="${s.settings.project_high_lakh}"></label><button id="a-save">Save</button>`;
+  $('a-save').onclick=async()=>{await post('/api/settings',{close_rate_pct:+$('a-close').value,minutes_saved_per_call:+$('a-min').value,project_low_lakh:+$('a-lo').value,project_high_lakh:+$('a-hi').value});toast('Saved');await load(true)};
+}
+async function load(force){
+  if(force){await fetch('/api/stats?t='+Date.now())}
+  S=await (await fetch('/api/stats')).json();render();loadBrief(false);
+}
+function showBrief(b){
+  if(!b.brief){$('brief').innerHTML='<span class="muted">No brief yet.</span>';return}
+  const t=String(b.brief).replace(/\*\*/g,''),parts={hl:'',Wins:[],'Lost leads':[],Actions:[]};let key='hl';
+  t.split('\n').forEach(l=>{const m=l.match(/^(Headline|Wins|Lost leads|Actions):\s*(.*)$/i);if(m){const k=m[1].toLowerCase();key=k==='headline'?'hl':k==='wins'?'Wins':k==='actions'?'Actions':'Lost leads';if(m[2]){if(key==='hl')parts.hl=m[2];else parts[key].push(m[2])}}else if(l.trim()){if(key==='hl')parts.hl+=(parts.hl?' ':'')+l.trim();else parts[key].push(l.replace(/^[-•]\s*/,''))}});
+  $('brief').innerHTML=`<div class="hl">${esc(parts.hl||t.split('\n')[0])}</div>${['Wins','Lost leads','Actions'].map(k=>parts[k].length?`<h4>${k}</h4><ul>${parts[k].map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'').join('')}`;
+  $('brief-when').textContent=(b.today?'Today · ':'')+'updated '+b.updated_at.replace('T',' ');
+}
+async function loadBrief(make){
+  const b=await (await fetch('/api/brief')).json();showBrief(b);
+  if(make||(!b.today&&S&&S.calls>0&&!loadBrief.tried)){loadBrief.tried=true;$('brief-btn').disabled=true;$('brief').insertAdjacentHTML('afterbegin','<div class="muted">Writing today\'s brief…</div>');
+    try{const r=await post('/api/brief');if(r.brief)showBrief(r);else{toast(r.error||'Could not write the brief');showBrief(b)}}catch(e){toast('Could not write the brief: '+e.message);showBrief(b)}$('brief-btn').disabled=false}
 }
 async function openCall(id){
-  const c=await (await fetch('/api/calls/'+id)).json(),r=c.result||{},i=c.integrations||{};
+  const c=await (await fetch('/api/calls/'+id)).json();cur=c;const r=c.result||{},i=c.integrations||{},v=c.effective_verdict;
+  const take=[...(r.dont_dont_reask||[]),...(r.uncertainties||[]).map(u=>'Unclear: '+u)];
   const crit=(r.criteria||[]).map(x=>`<li><b>${esc(x.id)}</b>: ${x.status} <span class="muted">${esc(x.evidence)}</span></li>`).join('');
-  const ints=Object.entries(i).map(([k,v])=>`<h4 style="margin:12px 0 2px">${k.replace(/_/g,' ')} <span class="hint">${esc(v.status||'')}</span></h4>${v.body?`<pre>${esc((v.subject?'Subject: '+v.subject+'\n':'')+(v.to?'To: '+v.to+'\n\n':'')+v.body)}</pre>`:''}${v.ics?`<pre>${esc(v.ics)}</pre>`:''}`).join('');
-  $('drawer').hidden=false;$('drawer').innerHTML=`<button class="ghost" onclick="$('drawer').hidden=true">Close</button><h3 style="margin-top:12px">${esc(c.caller_label)} <span class="pill p-${c.verdict}">${c.verdict}</span></h3><p>${esc(c.gist)}</p><h4>Rubric</h4><ul>${crit}</ul>${ints}<h4>Transcript</h4><pre>${esc((c.transcript||[]).map(t=>t.who.toUpperCase()+': '+t.text).join('\n'))}</pre>`;
+  const ints=Object.entries(i).map(([k,x])=>`<h4>${k.replace(/_/g,' ')} <span class="hint">${esc(x.status||'')}</span></h4>${x.body?`<pre>${esc((x.subject?'Subject: '+x.subject+'\n':'')+(x.to?'To: '+x.to+'\n\n':'')+x.body)}</pre>`:''}`).join('');
+  $('drawer').hidden=false;
+  $('drawer').innerHTML=`<button class="ghost" id="dclose">Close</button>
+   <h3 style="margin-top:12px">${esc((c.lead||{}).name||c.caller_label)} <span class="pill p-${v}">${VL[v]||v}</span>${c.effective_verdict!==c.verdict?` <span class="tag">AI said ${VL[c.verdict]||c.verdict}</span>`:''}</h3>
+   <p class="muted mono" style="margin:2px 0">${esc(c.caller_label)} · ${ago(c.started_at)} · answered in ${secs(c.ring_to_answer_s)} · ${inr(c.cost_inr)}</p>
+   <h4>Caller profile</h4><div class="kvr"><span>Phone</span><span class="mono">${esc(c.caller_label)}</span></div>${['property_type','location','sqft','scope','timeline','decision_maker','referral','email'].map(k=>(c.lead||{})[k]?`<div class="kvr"><span>${k.replace('_',' ')}</span><span>${esc((c.lead||{})[k])}</span></div>`:'').join('')}<div class="kvr"><span>Sentiment</span><span class="tag ${r.sentiment==='negative'?'bad':''}">${esc(r.sentiment||'not rated')}</span></div><div class="kvr"><span>Telegram</span><span class="tag ${(c.ops||{}).telegram?'ok':''}">${(c.ops||{}).telegram?'sent '+esc(String((c.ops||{}).telegram).replace('T',' ')):'not sent'}</span></div>
+   <h4>Key takeaways</h4><ul style="margin:0;padding-left:18px"><li>${esc(c.gist)}</li>${(r.dont_reask||[]).length?`<li>Already asked, do not re-ask: ${esc((r.dont_reask||[]).join(', '))}</li>`:''}${r.first_question_for_designer?`<li>Start with: ${esc(r.first_question_for_designer)}</li>`:''}${(r.uncertainties||[]).map(u=>`<li>Unclear: ${esc(u)}</li>`).join('')}${r.price_asked?'<li>Asked about price, steered to the free consultation</li>':''}</ul>
+   ${c.has_audio?`<h4>Recording</h4><audio controls preload="none" src="/api/calls/${c.id}/audio"></audio>`:''}
+   <h4>Actions</h4>
+   <div class="actions"><select id="d-des" aria-label="Designer">${S.designers.map(n=>`<option ${((c.ops||{}).assigned_to===n)?'selected':''}>${esc(n)}</option>`).join('')}</select><button id="d-assign">Assign and email designer</button><button class="ghost" id="d-tg" title="${S.telegram?'':'Telegram is not set up'}">Send to Telegram</button></div>
+   <div class="actions"><select id="d-stage" aria-label="Pipeline stage">${S.stages.map(([k,l])=>`<option value="${k}" ${c.stage===k?'selected':''}>${l}</option>`).join('')}</select><button class="ghost" id="d-stage-b">Move lead</button></div>
+   <div class="actions"><select id="d-ov" aria-label="Outcome">${['qualified','declined','not_now','escalate'].map(k=>`<option value="${k}" ${v===k?'selected':''}>${VL[k]}</option>`).join('')}</select><input id="d-note" placeholder="Why (optional)" style="flex:1;min-width:120px"><button class="ghost" id="d-ov-b">Change outcome</button>${c.effective_verdict!==c.verdict?'<button class="ghost" id="d-ov-r">Back to AI outcome</button>':''}</div>
+   <p class="hint">Changing an outcome to Qualified also emails the designer the handoff note.</p>
+   <h4>Rubric</h4><ul style="margin:0;padding-left:18px;font-size:12.5px">${crit}</ul>${ints}
+   <h4>Audit log</h4>${(c.audit||[]).length?`<ul style="margin:0;padding-left:18px;font-size:12.5px">${c.audit.map(a=>`<li><span class="mono muted">${esc(a.ts.replace('T',' '))}</span> ${esc(a.actor)}: ${esc(a.action)} ${esc(a.detail?(a.detail.from!==undefined?a.detail.from+' → '+a.detail.to:(a.detail.message||a.detail.status||'')):'')}${a.detail&&a.detail.note?' ('+esc(a.detail.note)+')':''}</li>`).join('')}</ul><p class="hint">Append-only. Names are what staff typed, there is no sign-in yet.</p>`:'<p class="muted" style="margin:0">No changes yet.</p>'}
+   <h4>Transcript</h4><pre>${esc((c.transcript||[]).map(t=>t.who.toUpperCase()+': '+t.text).join('\n'))}</pre>`;
+  $('dclose').onclick=()=>$('drawer').hidden=true;
+  $('d-assign').onclick=async()=>{try{const j=await post('/api/calls/'+id+'/assign',{designer:$('d-des').value});toast('Assigned. Email: '+(j.email||'done'));await load(true)}catch(e){toast(e.message)}};
+  $('d-tg').onclick=async()=>{const j=await post('/api/calls/'+id+'/telegram');toast(j.message||'Done')};
+  $('d-stage-b').onclick=async()=>{await post('/api/calls/'+id+'/stage',{stage:$('d-stage').value});toast('Moved');await load(true)};
+  $('d-ov-b').onclick=async()=>{const j=await post('/api/calls/'+id+'/override',{verdict:$('d-ov').value,note:$('d-note').value});toast(j.message||'Changed');await load(true);openCall(id)};
+  if($('d-ov-r'))$('d-ov-r').onclick=async()=>{await post('/api/calls/'+id+'/override/clear');toast('Back to the AI outcome');await load(true);openCall(id)};
 }
-$('refresh').onclick=()=>{last=Date.now();load()};
-$('brief-btn').onclick=async()=>{$('brief-btn').disabled=true;$('brief').textContent='Writing…';const r=await fetch('/api/brief',{method:'POST'});const j=await r.json();$('brief').textContent=j.brief||j.error;$('brief-btn').disabled=false;load()};
+$('q-go').onclick=runSearch;$('q').onkeydown=e=>{if(e.key==='Enter')runSearch()};
+async function runSearch(){const q=$('q').value.trim();if(!q)return;$('q-out').innerHTML='<p class="muted">Searching…</p>';
+ try{const r=await post('/api/search',{q});$('q-out').innerHTML=r.results&&r.results.length?r.results.map(x=>`<div class="frow2" data-id="${x.id}" style="grid-template-columns:64px minmax(0,1fr) auto;"><span class="t">${ago(x.when)}</span><span><b>${esc(x.name)}</b><br><span class="g" style="white-space:normal">${esc(x.why)}</span></span><span class="pill p-${x.verdict}">${VL[x.verdict]||x.verdict}</span></div>`).join(''):'<p class="muted">No calls matched.</p>';
+  document.querySelectorAll('#q-out .frow2').forEach(e=>e.onclick=()=>openCall(e.dataset.id))}catch(e){$('q-out').innerHTML='<p class="muted">Search failed: '+esc(e.message)+'</p>'}}
+$('sys-go').onclick=async()=>{$('sys').innerHTML='<p class="muted">Checking…</p>';const r=await (await fetch('/api/system')).json();window.__model=r.gemini_model;
+ $('sys').innerHTML=r.checks.map(c=>`<div class="kvr"><span><i class="dot ${c.ok?'g':'r'}"></i>${c.name}</span><span class="mono">${c.ms} ms <span class="muted">${esc(c.note)}</span></span></div>`).join('')+`<div class="kvr"><span><i class="dot ${r.webhook_last?'g':'y'}"></i>Vaani webhook</span><span class="muted">${r.webhook_last?'last event '+esc(r.webhook_last.event||'')+' at '+esc((r.webhook_last.at||'').replace('T',' ')):'no event received yet'}</span></div><div class="kvr"><span>AI model</span><span class="mono">${esc(r.gemini_model)}</span></div>`};
+try{$('actor').value=actor()}catch(e){}$('actor').onchange=()=>{try{localStorage.setItem('aangan-actor',$('actor').value.trim())}catch(e){}};
+$('brief-btn').onclick=()=>loadBrief(true);$('refresh').onclick=()=>load(true);
 load();let last=Date.now();document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Date.now()-last>60000){last=Date.now();load()}});
 </script></body></html>

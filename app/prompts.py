@@ -70,6 +70,7 @@ Verdict rules from the rubric: two or more fails: declined. One fail on 1, 2 or 
 may come back, e.g. timeline too short now but possible later). Unclear on 4 or 5: still qualified, note it in uncertainties.
 A budget the caller volunteers that is clearly far below any project of that scope fails criterion 4.
 Existing-client complaints or requests for a senior person: verdict escalate. A missed or empty call: missed.
+Set sentiment to negative when the caller sounded frustrated, angry or let down, otherwise neutral or positive.
 Never include any price or per-sq-ft figure that the studio might charge. Write the gist for a busy founder: 2 or 3 plain
 sentences saying who called, what they want, and what happens next."""
 
@@ -89,6 +90,7 @@ FINAL_SCHEMA = {
         "first_question_for_designer": {"type": "STRING"},
         "needs_human_review": {"type": "BOOLEAN"},
         "language": {"type": "STRING"},
+        "sentiment": {"type": "STRING", "enum": ["positive", "neutral", "negative"]},
     },
     "required": ["verdict", "criteria", "lead", "price_asked", "gist", "uncertainties", "dont_reask", "first_question_for_designer", "needs_human_review"],
 }
