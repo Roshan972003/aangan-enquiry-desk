@@ -17,6 +17,13 @@ def _outbox(kind, name, content):
 # ---------------- HubSpot ----------------
 HS = "https://api.hubapi.com"
 
+def _first_stage(c):
+    """Use the first stage of the default deal pipeline, whatever this HubSpot account calls it."""
+    r = c.get(f"{HS}/crm/v3/pipelines/deals"); r.raise_for_status()
+    p = next((x for x in r.json()["results"] if x["id"] == "default"), r.json()["results"][0])
+    st = sorted(p["stages"], key=lambda x: x.get("displayOrder", 0))[0]
+    return p["id"], st["id"]
+
 def hubspot_sync(call_id, lead, result, call_meta, live=True):
     props = {"firstname": (lead.get("name") or "Unknown caller"), "phone": call_meta.get("phone") or "",
              "email": lead.get("email") or "", "city": "Pune"}
@@ -42,6 +49,8 @@ def hubspot_sync(call_id, lead, result, call_meta, live=True):
                     c.patch(f"{HS}/crm/v3/objects/contacts/{contact_id}", json={"properties": props}).raise_for_status()
             if not contact_id:
                 r = c.post(f"{HS}/crm/v3/objects/contacts", json={"properties": props}); r.raise_for_status(); contact_id = r.json()["id"]
+            pipe, stage = _first_stage(c)
+            payload["deal"].update({"pipeline": pipe, "dealstage": stage})
             deal = c.post(f"{HS}/crm/v3/objects/deals", json={"properties": payload["deal"], "associations": [{"to": {"id": contact_id}, "types": [{"associationCategory": "HUBSPOT_DEFINED", "associationTypeId": 3}]}]})
             deal.raise_for_status()
             n = c.post(f"{HS}/crm/v3/objects/notes", json={"properties": {"hs_note_body": note.replace("\n", "<br>"), "hs_timestamp": datetime.utcnow().isoformat() + "Z"},
