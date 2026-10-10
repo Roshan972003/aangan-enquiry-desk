@@ -1,7 +1,7 @@
 [
-  {"name": "Aditi Deshmukh", "title": "Principal Designer", "email": "aditi@example.com", "commercial": true, "areas": ["Koregaon Park", "Kalyani Nagar", "Baner"]},
-  {"name": "Rohan Kulkarni", "title": "Senior Interior Designer", "email": "rohan@example.com", "commercial": false, "areas": ["Baner", "Aundh", "Pimple Saudagar"]},
-  {"name": "Meera Joshi", "title": "Interior Designer", "email": "meera@example.com", "commercial": false, "areas": ["Magarpatta", "Hadapsar", "Undri"]},
-  {"name": "Kabir Shah", "title": "Commercial Design Lead", "email": "kabir@example.com", "commercial": true, "areas": []},
-  {"name": "Sneha Patil", "title": "Junior Designer", "email": "sneha@example.com", "commercial": false, "areas": []}
+  {"name": "Kabir Singh", "title": "Principal Designer", "email": "kabir.singh@example.com", "commercial": true, "areas": ["Koregaon Park", "Kalyani Nagar", "Baner"]},
+  {"name": "Arjun Reddy", "title": "Senior Interior Designer", "email": "arjun.reddy@example.com", "commercial": false, "areas": ["Baner", "Aundh", "Pimple Saudagar"]},
+  {"name": "Rancho", "title": "Interior Designer", "email": "rancho@example.com", "commercial": false, "areas": ["Magarpatta", "Hadapsar", "Undri"]},
+  {"name": "Rocky Bhai", "title": "Commercial Design Lead", "email": "rocky@example.com", "commercial": true, "areas": []},
+  {"name": "Pushpa Raj", "title": "Junior Designer", "email": "pushpa@example.com", "commercial": false, "areas": []}
 ]
