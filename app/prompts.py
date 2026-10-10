@@ -70,6 +70,7 @@ Verdict rules from the rubric: two or more fails: declined. One fail on 1, 2 or 
 may come back, e.g. timeline too short now but possible later). Unclear on 4 or 5: still qualified, note it in uncertainties.
 A budget the caller volunteers that is clearly far below any project of that scope fails criterion 4.
 Existing-client complaints or requests for a senior person: verdict escalate. A missed or empty call: missed.
+If the caller agreed to a specific consultation slot, set chosen_slot_iso to that slot as an ISO 8601 date-time in Indian time (for example 2026-10-12T11:00:00+05:30), using the call date given above to resolve words like "Monday"; otherwise null.
 Set mood to one word for the caller's overall state: calm (relaxed, straightforward), curious (asking many questions, exploring), hesitant (unsure, delaying, comparing) or frustrated (annoyed, let down). Set sentiment_score from 0 (very unhappy) to 100 (very happy) for the caller's mood across the call. The transcript lines are numbered like [3]. In key_events list up to 8 important moments (scope discussed, price question, email confirmed, booking made, complaint, objection, the reason for a decline, a referral, an escalation), each with the line number as turn and a short label of a few words.
 Set sentiment to negative when the caller sounded frustrated, angry or let down, otherwise neutral or positive.
 Never include any price or per-sq-ft figure that the studio might charge. Write the gist for a busy founder: 2 or 3 plain
@@ -93,6 +94,7 @@ FINAL_SCHEMA = {
         "language": {"type": "STRING"},
         "sentiment": {"type": "STRING", "enum": ["positive", "neutral", "negative"]},
         "sentiment_score": {"type": "INTEGER"},
+        "chosen_slot_iso": {"type": "STRING", "nullable": True},
         "mood": {"type": "STRING", "enum": ["calm", "curious", "hesitant", "frustrated"]},
         "key_events": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
             "turn": {"type": "INTEGER"},

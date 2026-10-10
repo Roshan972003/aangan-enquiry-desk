@@ -95,6 +95,13 @@ def finalize(transcript, started_at, duration_s, source, caller_label, call_id=N
     slot = None
     if slots and slot_choice:
         slot = next((s for s in slots if s["id"] == slot_choice), None)
+    booked_after_call = False
+    if result["verdict"] == "qualified" and not slot and lead.get("email") and result.get("chosen_slot_iso") and live_integrations and config.LIVE_INTEGRATIONS:
+        try:
+            slot = slotmod.match_slot(result["chosen_slot_iso"])
+            booked_after_call = bool(slot)
+        except Exception:
+            slot = None
     # a qualified lead gets a designer email even without a booked slot (designer calls the client)
     verdict = result["verdict"]
     ints = {}
@@ -113,6 +120,8 @@ def finalize(transcript, started_at, duration_s, source, caller_label, call_id=N
             ints["client_invite"] = booking["invite"]
         else:
             ints["client_invite"] = integ.client_invite(cid, lead, slot, live_integrations, result)
+            if booked_after_call:
+                ints["client_invite"]["status"] = "booked right after the call. " + str(ints["client_invite"].get("status"))
     elif verdict == "escalate":
         ints["escalation_email"] = integ.escalation_email(cid, lead, result, live_integrations)
     elif verdict in ("declined", "not_now"):

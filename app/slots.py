@@ -1,6 +1,6 @@
 """Mock designer calendar. Replace available_slots() with a Google Calendar free/busy call later."""
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import httpx
 from app import config
 from app.config import DESIGNERS
@@ -53,3 +53,28 @@ def _mock_slots(after: datetime, n: int = 6, commercial: bool = False):
                     break
         day += timedelta(days=1)
     return out
+
+
+def match_slot(iso: str):
+    """Find the free Cal.com slot that matches a time the caller agreed to. Returns a slot dict, or None if it is no longer free."""
+    k, et = config.env("CAL_API_KEY"), config.env("CAL_EVENT_TYPE_ID")
+    if not (k and et and iso):
+        return None
+    try:
+        want = datetime.fromisoformat(iso)
+    except ValueError:
+        return None
+    if want.tzinfo is None:
+        want = want.replace(tzinfo=timezone(timedelta(hours=5, minutes=30)))
+    day = want.astimezone(timezone(timedelta(hours=5, minutes=30))).date()
+    r = httpx.get("https://api.cal.com/v2/slots", headers={"Authorization": f"Bearer {k}", "cal-api-version": "2024-09-04"},
+                  params={"eventTypeId": et, "start": day.isoformat(), "end": (day + timedelta(days=1)).isoformat(), "timeZone": "Asia/Kolkata"}, timeout=20)
+    if r.status_code != 200:
+        return None
+    for _, items in r.json().get("data", {}).items():
+        for i in items:
+            t = datetime.fromisoformat(i["start"])
+            if abs((t - want).total_seconds()) < 60:
+                return {"id": 0, "start": t.isoformat(), "label": t.strftime("%A %d %B, %I:%M %p").replace(" 0", " "),
+                        "designer": "Aangan designer", "designer_email": DESIGNERS[0]["email"], "source": "cal"}
+    return None
