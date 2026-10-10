@@ -44,7 +44,7 @@ async def tool_book(request: Request):
     """Vaani tool: book_appointment. Books on Cal.com, which emails the client the invite."""
     _auth(request)
     b = await _body(request)
-    name, email, start = _pick(b, "name", "full_name"), _pick(b, "email", "email_address"), _pick(b, "start", "start_time", "slot", "datetime")
+    name, email, start = _pick(b, "caller_name", "name", "full_name"), _pick(b, "caller_email", "email", "email_address"), _pick(b, "slot_start", "start", "start_time", "slot", "datetime")
     if not (email and start):
         return {"ok": False, "say": "I still need the caller's email and the slot start time. Ask for the email and spell it back."}
     slot = {"start": start, "label": str(start), "designer": "Aangan designer", "designer_email": config.DESIGNERS[0]["email"], "source": "cal"}
@@ -52,7 +52,7 @@ async def tool_book(request: Request):
         dt = datetime.fromisoformat(str(start).replace("Z", "+00:00"))
         slot["label"] = dt.strftime("%A %d %B, %I:%M %p").replace(" 0", " ")
         res = integ.cal_book(_pick(b, "call_id", default="vaani"), {"name": name, "email": email}, slot,
-                             {"gist": _pick(b, "notes", "summary", default="")})
+                             {"gist": _pick(b, "call_notes", "notes", "summary", default="")})
     except Exception as e:
         msg = str(e).replace(config.env("CAL_API_KEY") or "x", "***")
         if "cannot receive mail" in msg or "400" in msg:
