@@ -4,41 +4,42 @@
 <script src="/static/theme.js"></script>
 <link rel="stylesheet" href="/static/style.css"></head><body>
 <div class="nav"><b>Aangan Enquiry Desk</b><a class="on" href="/">Dashboard</a><a href="/simulator">Call simulator</a><button class="ghost" id="refresh" style="padding:5px 10px">Refresh</button></div>
-<div class="wrap">
-  <div style="display:flex;justify-content:space-between;align-items:end;gap:12px;flex-wrap:wrap"><div><div class="eyebrow">Phone channel · live from the call log</div><h2 style="font-size:26px;margin-top:4px">Founder's view</h2></div><div class="actions" style="margin:0"><span class="hint">Your name for the audit log</span><input id="actor" style="width:130px" placeholder="e.g. Nikhil"><a class="btn ghost" href="/api/export.csv" download>Export CSV</a><a class="btn ghost" href="/api/export.pdf" download>Export PDF</a></div></div>
+<div class="wrap wide">
+  <div style="display:flex;justify-content:space-between;align-items:end;gap:12px;flex-wrap:wrap"><div><div class="eyebrow">Aangan Studio · phone enquiries · live</div><h2 style="font-size:26px;margin-top:4px">Executive dashboard</h2></div><div class="actions" style="margin:0"><span class="hint">Your name for the audit log</span><input id="actor" style="width:130px" placeholder="e.g. Nikhil"><a class="btn ghost" href="/api/export.csv" download>Export CSV</a><a class="btn ghost" href="/api/export.pdf" download>Export PDF</a></div></div>
   <div id="empty" class="card" hidden>No calls yet. Make one in the <a href="/simulator">simulator</a> or a Vaani web call, or load the September transcripts with <span class="mono">python replay.py</span>.</div>
 
-  <!-- executive summary -->
-  <div class="card digest" style="border-color:var(--gold)">
-    <div style="display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap"><h3>Today's brief <span class="pill" style="background:var(--gold-soft);color:var(--warn)">Gemini</span></h3><span class="hint" id="brief-when"></span><button id="brief-btn" class="ghost">Write today's brief</button></div>
+  <!-- 1. AI summary banner -->
+  <div class="card digest">
+    <div style="display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap"><h3>AI executive digest <span class="pill" style="background:var(--gold-soft);color:var(--warn)">Gemini</span></h3><span class="hint" id="brief-when"></span><button id="brief-btn" class="ghost">Write today's brief</button></div>
+    <div class="live" id="live"></div>
     <div id="brief" style="margin-top:6px"><span class="muted">No brief yet.</span></div>
   </div>
 
-  <div class="card"><h3>Search every call</h3><p class="hint">Ask in plain English, for example "clients asking for 4BHK in Baner" or "calls where the client complained about timeline".</p><div class="actions"><input id="q" style="flex:1;min-width:200px" placeholder="Search calls and transcripts"><button id="q-go">Search</button></div><div id="q-out"></div></div>
+  <!-- 2. four metric cards -->
+  <div class="grid g4" id="kpis"></div>
 
-  <!-- glanceable KPIs -->
-  <div class="grid g3" id="kpis"></div>
-
-  <!-- feed + speed -->
-  <div class="grid g2">
-    <div class="card"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center"><h3>Enquiry feed</h3><div class="chips" id="filters"></div></div><div class="feed" id="feed" style="margin-top:6px"></div></div>
-    <div class="card"><h3>Conversion speed</h3><p class="hint">Target: every enquiry answered within 5 minutes, day or night.</p><div id="speed"></div></div>
+  <!-- 3. command centre: left tracker + feed, centre kanban, right escalations -->
+  <div class="cmd">
+    <aside class="side">
+      <div class="card defl"><h3>Pricing deflection tracker</h3><p class="hint">Callers who asked for a per-square-foot rate and were safely steered to the free consultation.</p><div id="defl"></div></div>
+      <div class="card"><h3>Response speed</h3><p class="hint">Target: every enquiry answered within 5 minutes, day or night.</p><div id="speed"></div></div>
+      <div class="card"><h3>Enquiry feed</h3><div class="chips" id="filters" style="margin:6px 0"></div><div class="feed" id="feed"></div></div>
+    </aside>
+    <section class="mid">
+      <div class="card"><h3>Lead pipeline</h3><p class="hint">Drag a card, or use the arrows. Each card can email the lead to the designer. Booked consultations start in "Consultation booked".</p><div class="kan" id="kanban" style="margin-top:8px"></div></div>
+      <div class="card" style="margin-top:14px"><h3>Search every call</h3><p class="hint">Ask in plain English, for example "clients asking for 4BHK in Baner" or "calls where the client complained about timeline".</p><div class="actions"><input id="q" style="flex:1;min-width:200px" placeholder="Search calls and transcripts"><button id="q-go">Search</button></div><div id="q-out"></div></div>
+    </section>
+    <aside class="side">
+      <div class="card red" id="esc-card"><h3>Escalation feed</h3><p class="hint">Complaints, unhappy callers, missed calls and unassigned qualified leads. Callbacks promised on the call: within 15 minutes.</p><div class="esc" id="esc" style="grid-template-columns:minmax(0,1fr)"></div></div>
+    </aside>
   </div>
 
-  <!-- escalations -->
-  <div class="card red" id="esc-card" hidden><h3>Red flags</h3><p class="hint">Escalations, unhappy callers, missed calls and qualified leads nobody has picked up. Callbacks promised on the call: within 15 minutes.</p><div class="esc" id="esc"></div></div>
-
-  <!-- kanban -->
-  <div class="card"><h3>Lead pipeline</h3><p class="hint">Drag a card, or use the arrows. Booked consultations start in "Site visit scheduled".</p><div class="kan" id="kanban" style="margin-top:8px"></div></div>
-
-  <!-- quality + volume -->
+  <!-- deeper insight -->
   <div class="grid g3">
     <div class="card"><h3>Property types</h3><div class="bars" id="types"></div></div>
     <div class="card"><h3>Location hotspots</h3><div class="bars" id="areas"></div></div>
     <div class="card"><h3>Calls per day</h3><p class="hint">Grey: all calls. Green: qualified.</p><div id="days"></div></div>
   </div>
-
-  <!-- guardrails + ROI -->
   <div class="two">
     <div class="card"><h3>Voice system and guardrails</h3><div id="guard"></div></div>
     <div class="card"><h3>Return and running cost</h3><div id="roi"></div></div>
@@ -73,14 +74,16 @@ function secs(s){return s==null?'-':s<60?Math.round(s)+' s':(s/60).toFixed(1)+' 
 function render(){
   const s=S;$('empty').hidden=s.calls>0;
   const d=s.days.slice(-30),acc='var(--accent)',gold='var(--gold)';
+  const lakhL=x=>'₹'+(+x).toLocaleString('en-IN',{maximumFractionDigits:1})+' <small>Lakhs</small>';
   const K=[
-   ['Answered within 5 min',s.within_5_min_pct==null?'-':s.within_5_min_pct+'<small>%</small>','Median '+secs(s.median_answer_s),level(s.within_5_min_pct,95,80),spark(d.map(x=>x.within5/Math.max(x.calls,1)*100),acc)],
-   ['Handled by the AI',s.containment_pct==null?'-':s.containment_pct+'<small>%</small>',s.contained+' of '+s.calls+' calls, no desk help',level(s.containment_pct,85,70),spark(d.map(x=>x.calls),acc)],
-   ['Qualified leads',s.qualified,s.calls?Math.round(100*s.qualified/s.calls)+'% of calls':'','g',spark(d.map(x=>x.qualified),'var(--good)'),'good-k'],
-   ['Pipeline value','₹'+lakh(s.pipeline.mid_lakh),'Range ₹'+lakh(s.pipeline.low_lakh)+' to ₹'+lakh(s.pipeline.high_lakh),'g',spark(d.map(x=>x.qualified),'var(--good)'),'good-k'],
-   ['Running cost',inr(s.cost_total_inr),inr(s.cost_per_call_inr)+' per call · '+(s.cost_per_qualified_inr==null?'-':inr(s.cost_per_qualified_inr))+' per lead',level(s.cost_per_qualified_inr==null?100:100-s.cost_per_qualified_inr,60,30),spark(d.map(x=>x.cost),gold),'cost'],
-   ['Return multiple',xfmt(s.roi_expected_x),'Expected revenue ÷ cost · at '+s.settings.close_rate_pct+'% close rate','g',spark(d.map(x=>x.qualified),acc),'cost']];
+   ['Qualified pipeline value',lakhL(s.pipeline.mid_lakh),s.qualified+' qualified · range ₹'+s.pipeline.low_lakh+' to '+s.pipeline.high_lakh+' L','g',spark(d.map(x=>x.qualified),'var(--good)'),'good-k'],
+   ['Response speed rate (under 5 min)',s.within_5_min_pct==null?'-':s.within_5_min_pct+'<small>%</small>','Median '+secs(s.median_answer_s)+' · '+s.after_hours+' after hours',level(s.within_5_min_pct,95,80),spark(d.map(x=>x.within5/Math.max(x.calls,1)*100),acc)],
+   ['AI containment rate',s.containment_pct==null?'-':s.containment_pct+'<small>%</small>',s.contained+' of '+s.calls+' calls handled with no desk help',level(s.containment_pct,85,70),spark(d.map(x=>x.calls),acc)],
+   ['Total running cost',inr(s.cost_total_inr),'Voice '+inr(s.cost_components.telephony+s.cost_components.speech)+' · AI tokens '+inr(s.cost_components.gemini),level(s.cost_per_qualified_inr==null?100:100-s.cost_per_qualified_inr,60,30),spark(d.map(x=>x.cost),gold),'cost']];
   $('kpis').innerHTML=K.map(k=>`<div class="card kpi ${k[5]||''}"><span class="l"><i class="dot ${k[3]}"></i>${k[0]}</span><span class="v">${k[1]}</span><span class="s">${k[2]}</span>${k[4]}</div>`).join('');
+  const t=s.today,V=s.verdicts;
+  $('live').innerHTML=`<b>${s.calls}</b> calls in total: <b class="g">${s.qualified} qualified</b> (pipeline <b class="g">₹${s.pipeline.mid_lakh.toLocaleString('en-IN',{maximumFractionDigits:1})} Lakhs</b>), <b>${(V.declined||0)+(V.not_now||0)}</b> declined, <b class="${(V.escalate||0)?'r':''}">${V.escalate||0} urgent escalation${(V.escalate||0)==1?'':'s'}</b>${V.missed?`, ${V.missed} missed`:''}. Today: ${t.calls} call${t.calls==1?'':'s'}, ${t.qualified} qualified.`;
+  $('defl').innerHTML=`<div style="display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap"><div class="num">${s.price_deflected}</div><div><div class="hint">of ${s.price_asked} price question${s.price_asked==1?'':'s'}</div><span class="tag ${s.price_leaks?'bad':'ok'}" style="box-shadow:${s.price_leaks?'var(--bad-glow)':'var(--good-glow)'}">${s.price_leaks?s.price_leaks+' price figure(s) spoken':'0 prices quoted'}</span></div></div>`;
   // filters + feed
   const fl=[['all','All'],['qualified','Qualified'],['declined','Declined'],['not_now','Not now'],['escalate','Escalated'],['missed','Missed']];
   $('filters').innerHTML=fl.map(([k,l])=>`<button class="chipb" data-f="${k}" aria-pressed="${filter===k}">${l}${k==='all'?'':' '+(s.verdicts[k]||0)}</button>`).join('');
@@ -95,8 +98,8 @@ function render(){
    <p class="hint">Before the system, about 48% of enquiries got no reply within 48 hours.</p>`;
   // red flags
   const fl2=s.red_flags||[],open2=fl2.filter(f=>!f.done);
-  $('esc-card').hidden=!fl2.length;
-  $('esc').innerHTML=fl2.slice(0,12).map(e=>`<div style="${e.done?'opacity:.55':''}"><div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(e.name)}</b><span class="tag bad">${esc(e.kind)}</span></div><span class="mono muted">${esc(e.phone)} · ${ago(e.at)}</span><span style="font-size:12.5px">${esc(e.gist)}</span><div class="actions">${/\d{6,}/.test(e.phone)?`<a class="btn" href="tel:${esc(e.phone.replace(/[^+\d]/g,''))}">Call back now</a>`:''}<button data-cb="${e.id}" data-st="${e.done?'pending':'called_back'}" class="ghost" style="padding:4px 10px">${e.done?'Reopen':'Mark called back'}</button><button data-open="${e.id}" class="ghost" style="padding:4px 10px">Open call</button></div></div>`).join('');
+  $('esc-card').hidden=false;
+  $('esc').innerHTML=!fl2.length?'<div class="esc-empty">All clear. No red flags right now.</div>':fl2.slice(0,12).map(e=>`<div style="${e.done?'opacity:.55':''}"><div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(e.name)}</b><span class="tag bad">${esc(e.kind)}</span></div><span class="mono muted">${esc(e.phone)} · ${ago(e.at)}</span><span style="font-size:12.5px">${esc(e.gist)}</span><div class="actions">${/\d{6,}/.test(e.phone)?`<a class="btn" href="tel:${esc(e.phone.replace(/[^+\d]/g,''))}">Call back now</a>`:''}<button data-cb="${e.id}" data-st="${e.done?'pending':'called_back'}" class="ghost" style="padding:4px 10px">${e.done?'Reopen':'Mark called back'}</button><button data-open="${e.id}" class="ghost" style="padding:4px 10px">Open call</button></div></div>`).join('');
   document.querySelectorAll('[data-cb]').forEach(b=>b.onclick=async()=>{await post('/api/calls/'+b.dataset.cb+'/callback',{status:b.dataset.st});await load(true)});
   document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openCall(b.dataset.open));
   // forecast
@@ -105,8 +108,9 @@ function render(){
   // tokens per day
   const td=(s.tokens_per_day||[]).slice(-14);$('tok').innerHTML=td.length?`<div class="hint" style="margin-top:8px">AI token use per day (${esc((window.__model||'Gemini'))})</div>${spark(td.map(x=>x.tokens),'var(--accent)')}<div class="hint">${td[td.length-1].tokens.toLocaleString('en-IN')} tokens on the latest day</div>`:'';
   // kanban
-  $('kanban').innerHTML=s.stages.map(([key,label],i)=>`<div class="col" data-stage="${key}"><h4><span>${label}</span><span>${s.kanban[key].length}</span></h4>${s.kanban[key].map(c=>`<div class="lead" draggable="true" data-id="${c.id}"><b>${esc(c.name)}</b><span class="m">${esc(c.type)} · ${esc(c.area)}${c.sqft?' · '+c.sqft+' sq ft':''}</span>${c.slot?`<span class="m">${esc(c.slot)}</span>`:''}<span class="m">${c.assigned_to?'Designer: '+esc(c.assigned_to):'Unassigned'}${c.overridden?' · edited':''}</span><div class="mv">${i>0?`<button class="ghost" data-mv="${c.id}" data-to="${s.stages[i-1][0]}" aria-label="Move back">←</button>`:''}${i<3?`<button class="ghost" data-mv="${c.id}" data-to="${s.stages[i+1][0]}" aria-label="Move forward">→</button>`:''}<button class="ghost" data-open="${c.id}">Open</button></div></div>`).join('')||'<span class="hint">Empty</span>'}</div>`).join('');
+  $('kanban').innerHTML=s.stages.map(([key,label],i)=>`<div class="col" data-stage="${key}"><h4><span>${label}</span><span>${s.kanban[key].length}</span></h4>${s.kanban[key].map(c=>`<div class="lead" draggable="true" data-id="${c.id}"><b>${esc(c.name)}</b><span class="m">${esc(c.type)} · ${esc(c.area)}${c.sqft?' · '+c.sqft+' sq ft':''}</span>${c.slot?`<span class="m">${esc(c.slot)}</span>`:''}<span class="m">${c.assigned_to?'Designer: '+esc(c.assigned_to):'Unassigned'}${c.overridden?' · edited':''}</span><div class="mv">${i>0?`<button class="ghost" data-mv="${c.id}" data-to="${s.stages[i-1][0]}" aria-label="Move back">←</button>`:''}${i<3?`<button class="ghost" data-mv="${c.id}" data-to="${s.stages[i+1][0]}" aria-label="Move forward">→</button>`:''}<button class="ghost" data-open="${c.id}">Open</button><button class="ghost tg" data-em="${c.id}" title="${s.gmail?'Email this lead to the designer':'Gmail is not connected yet, so this saves the email as a file'}">Email</button></div></div>`).join('')||'<span class="hint">Empty</span>'}</div>`).join('');
   document.querySelectorAll('[data-mv]').forEach(b=>b.onclick=async e=>{e.stopPropagation();await post('/api/calls/'+b.dataset.mv+'/stage',{stage:b.dataset.to});await load(true)});
+  document.querySelectorAll('#kanban [data-em]').forEach(b=>b.onclick=async e=>{e.stopPropagation();const j=await post('/api/calls/'+b.dataset.em+'/email');toast(j.message||'Done');await load(true)});
   document.querySelectorAll('#kanban [data-open]').forEach(b=>b.onclick=e=>{e.stopPropagation();openCall(b.dataset.open)});
   document.querySelectorAll('.lead').forEach(l=>l.ondragstart=e=>e.dataTransfer.setData('text/plain',l.dataset.id));
   document.querySelectorAll('.col').forEach(c=>{c.ondragover=e=>{e.preventDefault();c.classList.add('over')};c.ondragleave=()=>c.classList.remove('over');c.ondrop=async e=>{e.preventDefault();c.classList.remove('over');const id=e.dataTransfer.getData('text/plain');if(id){await post('/api/calls/'+id+'/stage',{stage:c.dataset.stage});await load(true)}}});
@@ -134,7 +138,7 @@ function render(){
    <div class="kvr" style="margin-top:6px"><span><b>Front-desk time saved</b></span><b class="big" style="font-size:20px">${s.time_saved_hours} h</b></div>
    <p class="hint">Pipeline is potential value, not revenue. The close rate is an assumption you can change on the right.</p>`;
   // connections
-  fetch('/api/health').then(r=>r.json()).then(h=>{$('conn').innerHTML=[['Gemini',h.llm],['HubSpot',h.hubspot?'connected':'not connected'],['Cal.com',h.cal?'connected':'not connected'],['Database',h.db],['Vaani',h.vaani_key_set?'key set':'no key'],['Telegram',s.telegram?'connected':'not set up'],['Email',h.smtp?'connected':'saved as files']].map(([a,b])=>`<div class="kvr"><b>${a}</b><span class="muted">${esc(b)}</span></div>`).join('')});
+  fetch('/api/health').then(r=>r.json()).then(h=>{$('conn').innerHTML=[['Gemini',h.llm],['HubSpot',h.hubspot?'connected':'not connected'],['Cal.com',h.cal?'connected':'not connected'],['Database',h.db],['Vaani',h.vaani_key_set?'key set':'no key'],['Gmail',(s.gmail||h.smtp)?'connected':'not connected, emails saved as files']].map(([a,b])=>`<div class="kvr"><b>${a}</b><span class="muted">${esc(b)}</span></div>`).join('')});
   // assumptions
   $('asm').innerHTML=`<label>Close rate %<input type="number" id="a-close" min="0" max="100" value="${s.settings.close_rate_pct}"></label><label>Minutes saved per call<input type="number" id="a-min" min="0" value="${s.settings.minutes_saved_per_call}"></label><label>Project low (L)<input type="number" id="a-lo" min="0" value="${s.settings.project_low_lakh}"></label><label>Project high (L)<input type="number" id="a-hi" min="0" value="${s.settings.project_high_lakh}"></label><button id="a-save">Save</button>`;
   $('a-save').onclick=async()=>{await post('/api/settings',{close_rate_pct:+$('a-close').value,minutes_saved_per_call:+$('a-min').value,project_low_lakh:+$('a-lo').value,project_high_lakh:+$('a-hi').value});toast('Saved');await load(true)};
@@ -164,11 +168,11 @@ async function openCall(id){
   $('drawer').innerHTML=`<button class="ghost" id="dclose">Close</button>
    <h3 style="margin-top:12px">${esc((c.lead||{}).name||c.caller_label)} <span class="pill p-${v}">${VL[v]||v}</span>${c.effective_verdict!==c.verdict?` <span class="tag">AI said ${VL[c.verdict]||c.verdict}</span>`:''}</h3>
    <p class="muted mono" style="margin:2px 0">${esc(c.caller_label)} · ${ago(c.started_at)} · answered in ${secs(c.ring_to_answer_s)} · ${inr(c.cost_inr)}</p>
-   <h4>Caller profile</h4><div class="kvr"><span>Phone</span><span class="mono">${esc(c.caller_label)}</span></div>${['property_type','location','sqft','scope','timeline','decision_maker','referral','email'].map(k=>(c.lead||{})[k]?`<div class="kvr"><span>${k.replace('_',' ')}</span><span>${esc((c.lead||{})[k])}</span></div>`:'').join('')}<div class="kvr"><span>Sentiment</span><span class="tag ${r.sentiment==='negative'?'bad':''}">${esc(r.sentiment||'not rated')}</span></div><div class="kvr"><span>Telegram</span><span class="tag ${(c.ops||{}).telegram?'ok':''}">${(c.ops||{}).telegram?'sent '+esc(String((c.ops||{}).telegram).replace('T',' ')):'not sent'}</span></div>
+   <h4>Caller profile</h4><div class="kvr"><span>Phone</span><span class="mono">${esc(c.caller_label)}</span></div>${['property_type','location','sqft','scope','timeline','decision_maker','referral','email'].map(k=>(c.lead||{})[k]?`<div class="kvr"><span>${k.replace('_',' ')}</span><span>${esc((c.lead||{})[k])}</span></div>`:'').join('')}<div class="kvr"><span>Sentiment</span><span class="tag ${r.sentiment==='negative'?'bad':''}">${esc(r.sentiment||'not rated')}</span></div><div class="kvr"><span>Lead emailed</span><span class="tag ${(c.ops||{}).emailed?'ok':''}">${(c.ops||{}).emailed?esc(String((c.ops||{}).emailed).replace('T',' ')):'not yet'}</span></div>
    <h4>Key takeaways</h4><ul style="margin:0;padding-left:18px"><li>${esc(c.gist)}</li>${(r.dont_reask||[]).length?`<li>Already asked, do not re-ask: ${esc((r.dont_reask||[]).join(', '))}</li>`:''}${r.first_question_for_designer?`<li>Start with: ${esc(r.first_question_for_designer)}</li>`:''}${(r.uncertainties||[]).map(u=>`<li>Unclear: ${esc(u)}</li>`).join('')}${r.price_asked?'<li>Asked about price, steered to the free consultation</li>':''}</ul>
    ${c.has_audio?`<h4>Recording</h4><audio controls preload="none" src="/api/calls/${c.id}/audio"></audio>`:''}
    <h4>Actions</h4>
-   <div class="actions"><select id="d-des" aria-label="Designer">${S.designers.map(n=>`<option ${((c.ops||{}).assigned_to===n)?'selected':''}>${esc(n)}</option>`).join('')}</select><button id="d-assign">Assign and email designer</button><button class="ghost" id="d-tg" title="${S.telegram?'':'Telegram is not set up'}">Send to Telegram</button></div>
+   <div class="actions"><select id="d-des" aria-label="Designer">${S.designers.map(n=>`<option ${((c.ops||{}).assigned_to===n)?'selected':''}>${esc(n)}</option>`).join('')}</select><button id="d-assign">Assign and email designer</button><button class="ghost" id="d-tg" title="${S.gmail?'':'Gmail is not connected yet, so this saves the email as a file'}">Email lead again</button></div>
    <div class="actions"><select id="d-stage" aria-label="Pipeline stage">${S.stages.map(([k,l])=>`<option value="${k}" ${c.stage===k?'selected':''}>${l}</option>`).join('')}</select><button class="ghost" id="d-stage-b">Move lead</button></div>
    <div class="actions"><select id="d-ov" aria-label="Outcome">${['qualified','declined','not_now','escalate'].map(k=>`<option value="${k}" ${v===k?'selected':''}>${VL[k]}</option>`).join('')}</select><input id="d-note" placeholder="Why (optional)" style="flex:1;min-width:120px"><button class="ghost" id="d-ov-b">Change outcome</button>${c.effective_verdict!==c.verdict?'<button class="ghost" id="d-ov-r">Back to AI outcome</button>':''}</div>
    <p class="hint">Changing an outcome to Qualified also emails the designer the handoff note.</p>
@@ -177,7 +181,7 @@ async function openCall(id){
    <h4>Transcript</h4><pre>${esc((c.transcript||[]).map(t=>t.who.toUpperCase()+': '+t.text).join('\n'))}</pre>`;
   $('dclose').onclick=()=>$('drawer').hidden=true;
   $('d-assign').onclick=async()=>{try{const j=await post('/api/calls/'+id+'/assign',{designer:$('d-des').value});toast('Assigned. Email: '+(j.email||'done'));await load(true)}catch(e){toast(e.message)}};
-  $('d-tg').onclick=async()=>{const j=await post('/api/calls/'+id+'/telegram');toast(j.message||'Done')};
+  $('d-tg').onclick=async()=>{const j=await post('/api/calls/'+id+'/email');toast(j.message||'Done');await load(true)};
   $('d-stage-b').onclick=async()=>{await post('/api/calls/'+id+'/stage',{stage:$('d-stage').value});toast('Moved');await load(true)};
   $('d-ov-b').onclick=async()=>{const j=await post('/api/calls/'+id+'/override',{verdict:$('d-ov').value,note:$('d-note').value});toast(j.message||'Changed');await load(true);openCall(id)};
   if($('d-ov-r'))$('d-ov-r').onclick=async()=>{await post('/api/calls/'+id+'/override/clear');toast('Back to the AI outcome');await load(true);openCall(id)};

@@ -77,6 +77,8 @@ def _send(msg: EmailMessage, kind, call_id, live=True):
 def designer_email(call_id, lead, result, slot, transcript_text, live=True):
     d = slot["designer"] if slot else "Designer pool"
     to = slot["designer_email"] if slot else config.STUDIO_EMAIL
+    if str(to).endswith("@example.com"):   # placeholder designer address: send to the studio head until real ones are set in designers.json
+        to = config.STUDIO_HEAD_EMAIL
     subj = f"Qualified: {lead.get('scope') or 'enquiry'} in {lead.get('location') or 'Pune'}, {int(lead['sqft']) if lead.get('sqft') else '?'} sq ft"
     body = (f"GIST\n{result['gist']}\n\n"
             f"WHO: {lead.get('name')} ({lead.get('decision_maker') or 'decision-maker not confirmed'})\n"
@@ -144,24 +146,11 @@ def decline_email(call_id, lead, live=True):
     m.set_content(body); r = _send(m, "decline", call_id, live); r.update({"to": lead["email"], "subject": m["Subject"], "body": body}); return r
 
 
-def telegram_send(text):
-    """Optional: needs TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID. Returns (ok, message)."""
-    if not (config.TELEGRAM_BOT_TOKEN and config.TELEGRAM_CHAT_ID):
-        return False, "Telegram is not set up. Add TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID to the environment."
-    try:
-        r = httpx.post(f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage", timeout=20,
-                       json={"chat_id": config.TELEGRAM_CHAT_ID, "text": text})
-        r.raise_for_status()
-        return True, "Sent to Telegram"
-    except httpx.HTTPError as e:
-        return False, "Telegram failed: " + str(e).replace(config.TELEGRAM_BOT_TOKEN, "***")[:120]
-
-
 def hubspot_move_stage(deal_id, stage_key):
     """Keep the HubSpot deal stage in step with the dashboard board. Best effort."""
     if not (deal_id and config.HUBSPOT_TOKEN):
         return "no HubSpot deal"
-    want = {"qualified": "Initial Consultation", "consultation_scheduled": "Initial Consultation", "proposal_sent": "Proposal Sent", "closed_won": "Closed Won"}[stage_key]
+    want = {"qualified": "Initial Consultation", "consultation_booked": "Initial Consultation", "site_visit": "Initial Consultation", "closed_won": "Closed Won"}[stage_key]
     h = {"Authorization": f"Bearer {config.HUBSPOT_TOKEN}", "Content-Type": "application/json"}
     try:
         with httpx.Client(timeout=20, headers=h) as c:

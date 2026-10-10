@@ -5,8 +5,9 @@ import calendar
 from app import config, db, guard
 
 _CACHE = {"t": 0, "v": None}
-STAGES = [("qualified", "Qualified"), ("consultation_scheduled", "Consultation scheduled"),
-          ("proposal_sent", "Proposal sent"), ("closed_won", "Closed / won")]
+STAGES = [("qualified", "Qualified"), ("consultation_booked", "Consultation booked"),
+          ("site_visit", "Site visit"), ("closed_won", "Closed / won")]
+_LEGACY = {"consultation_scheduled": "consultation_booked", "site_visit_scheduled": "consultation_booked", "proposal_sent": "site_visit", "consultation_done": "site_visit"}
 AREAS = ["Kothrud", "Baner", "Aundh", "Wakad", "Koregaon Park", "Kalyani Nagar", "Viman Nagar", "Hadapsar", "Magarpatta", "NIBM", "Kondhwa",
          "Undri", "Shivane", "Warje", "Erandwane", "Deccan", "Pimpri", "Chinchwad", "Pimple Saudagar", "Pimple Nilakh", "Ravet", "Hinjewadi",
          "Pashan", "Kharadi", "Nanded"]
@@ -25,7 +26,8 @@ def eff_verdict(c):
 
 def stage_of(c):
     ops = c.get("ops") or {}
-    return ops.get("stage") or ("consultation_scheduled" if c.get("slot") else "qualified")
+    st = _LEGACY.get(ops.get("stage"), ops.get("stage"))
+    return st or ("consultation_booked" if c.get("slot") else "qualified")
 
 def prop_type(lead):
     t = f"{lead.get('property_type') or ''} {lead.get('scope') or ''}".lower()
@@ -108,7 +110,7 @@ def _compute():
         lead = c.get("lead") or {}
         ops = c.get("ops") or {}
         return {"id": c["id"], "name": lead.get("name") or "Caller", "type": prop_type(lead), "area": area_of(lead), "sqft": lead.get("sqft"),
-                "timeline": lead.get("timeline"), "stage": stage_of(c), "telegram": bool(ops.get("telegram")), "assigned_to": ops.get("assigned_to"), "gist": c["gist"],
+                "timeline": lead.get("timeline"), "stage": stage_of(c), "emailed": bool(ops.get("emailed")), "assigned_to": ops.get("assigned_to"), "gist": c["gist"],
                 "slot": (c.get("slot") or {}).get("label"), "started_at": c["started_at"], "overridden": bool(ops.get("override"))}
     escal = [{"id": c["id"], "name": (c.get("lead") or {}).get("name") or c["caller_label"], "phone": c["caller_label"], "gist": c["gist"],
               "started_at": c["started_at"], "callback": ((c.get("ops") or {}).get("callback") or "pending")}
@@ -127,7 +129,8 @@ def _compute():
             flags.append({"id": c["id"], "kind": "Missed call", "name": who, "phone": c["caller_label"], "gist": "No voicemail. Call them back.", "at": c["started_at"], "done": done})
         elif e == "qualified" and not ops.get("assigned_to") and not ops.get("stage") and now - when > timedelta(hours=24):
             flags.append({"id": c["id"], "kind": "Follow-up overdue", "name": who, "phone": c["caller_label"], "gist": "Qualified more than a day ago and still unassigned.", "at": c["started_at"], "done": done})
-    flags.sort(key=lambda f: (f["done"], f["at"]), reverse=False)
+    flags.sort(key=lambda f: f["at"], reverse=True)
+    flags.sort(key=lambda f: f["done"])
     # forecast: simple run-rate, not machine learning
     last30 = [c for c in calls if now - datetime.fromisoformat(c["started_at"]) <= timedelta(days=30)]
     q30 = sum(1 for c in last30 if ev[c["id"]] == "qualified")
@@ -166,7 +169,7 @@ def _compute():
         "stages": STAGES, "escalations": escal, "red_flags": flags, "forecast": forecast, "today": today,
         "tokens_per_day": [{"date": k, "tokens": t} for k, t in sorted(tok_day.items())],
         "designers": [d["name"] for d in config.DESIGNERS],
-        "telegram": bool(config.TELEGRAM_BOT_TOKEN and config.TELEGRAM_CHAT_ID),
+        "gmail": bool(config.SMTP_HOST and config.SMTP_USER),
         "recent": [{"id": c["id"], "started_at": c["started_at"], "caller": c["caller_label"],
                     "name": (c.get("lead") or {}).get("name"), "verdict": ev[c["id"]], "original": c["verdict"],
                     "overridden": ev[c["id"]] != c["verdict"], "gist": c["gist"], "answer_s": c["ring_to_answer_s"],

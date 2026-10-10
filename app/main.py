@@ -142,18 +142,21 @@ def assign(cid: str, b: AssignIn, request: Request):
     db.audit_add(cid, "assign", {"from": before, "to": d["name"]}, _actor(request))
     return {"ok": True, "email": mail.get("status")}
 
-@app.post("/api/calls/{cid}/telegram")
-def telegram(cid: str, request: Request):
+@app.post("/api/calls/{cid}/email")
+def email_lead(cid: str, request: Request):
+    """Resend the lead summary to the designer (the assigned one, or the first on the list) by email."""
     from app import integrations as integ
     c = _must(cid)
-    lead = c.get("lead") or {}
-    text = (f"Aangan lead: {lead.get('name') or 'caller'} - {stats.prop_type(lead)} in {stats.area_of(lead)}\n{c['gist']}\n"
-            f"Booked: {(c.get('slot') or {}).get('label') or 'not yet'}")
-    ok, msg = integ.telegram_send(text)
-    db.audit_add(cid, "telegram", {"ok": ok, "message": msg}, _actor(request))
-    if ok:
-        db.update_ops(cid, {"telegram": datetime.now().isoformat(timespec="seconds")})
-    return JSONResponse({"ok": ok, "message": msg}, status_code=200 if ok else 400)
+    name = (c.get("ops") or {}).get("assigned_to")
+    d = next((x for x in config.DESIGNERS if x["name"] == name), config.DESIGNERS[0])
+    slot = dict(c.get("slot") or {})
+    slot.update({"designer": d["name"], "designer_email": d["email"], "label": slot.get("label") or "not booked yet, call the client"})
+    text = "\n".join(f"{t['who'].upper()}: {t['text']}" for t in (c.get("transcript") or []))
+    mail = integ.designer_email(cid, c.get("lead") or {}, c.get("result") or {}, slot if c.get("slot") else None, text, True)
+    sent = mail.get("mode") == "live"
+    db.audit_add(cid, "email", {"to": mail.get("to"), "message": mail.get("status")}, _actor(request))
+    db.update_ops(cid, {"emailed": datetime.now().isoformat(timespec="seconds"), "assigned_to": d["name"]})
+    return JSONResponse({"ok": sent, "message": ("Emailed " + str(mail.get("to"))) if sent else "Saved, not sent: Gmail is not connected yet (" + str(mail.get("status")) + ")"})
 
 @app.post("/api/calls/{cid}/override")
 def override(cid: str, b: OverrideIn, request: Request):
@@ -228,12 +231,12 @@ def make_brief():
     s = stats.compute()
     calls = db.all_calls()[:40]
     gists = "\n".join(f"- [{stats.eff_verdict(c)}] {c['gist']}" for c in calls)
-    slim = {k: s[k] for k in ("calls", "missed", "qualified", "median_answer_s", "within_5_min_pct", "containment_pct", "price_asked", "price_leaks",
-                              "cost_total_inr", "cost_per_qualified_inr", "time_saved_hours", "verdicts")}
+    slim = {"pipeline_lakh_mid": s["pipeline"]["mid_lakh"], "today": s["today"], **{k: s[k] for k in ("calls", "missed", "qualified", "median_answer_s", "within_5_min_pct", "containment_pct", "price_asked", "price_leaks",
+                              "cost_total_inr", "cost_per_qualified_inr", "time_saved_hours", "verdicts")}}
     text, usage = gemini.generate(
         "You write a short daily digest for the founder of an interior design studio about how the AI phone desk did. Plain text only, no markdown, "
         "never mention any price per square foot. Use exactly this shape:\n"
-        "Headline: one sentence.\nWins:\n- two or three short bullets\nLost leads:\n- one to three short bullets on who was declined or missed and why\n"
+        "Headline: one sentence stating total calls, the qualified pipeline value in rupees (lakhs), how many were declined, and how many urgent escalations.\nWins:\n- two or three short bullets\nLost leads:\n- one to three short bullets on who was declined or missed and why\n"
         "Actions:\n- two or three concrete things the team should do today, such as call back a named complaint or follow up a lead.",
         [{"role": "user", "text": f"Stats: {slim}\n\nRecent call gists:\n{gists}"}], None, 0.3)
     now = datetime.now().isoformat(timespec="seconds")
