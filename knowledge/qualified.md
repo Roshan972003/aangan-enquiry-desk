@@ -41,3 +41,11 @@ The person should be the one who decides, or calling on behalf of someone who ha
 *"What if the budget doesn't match but they haven't said so?"*
 
 Don't probe. If they volunteer a number that clearly fails, note it and do not forward. If they don't mention budget, forward the lead. The designer establishes fit at the consultation. Your job is to catch obvious misalignments — not to pre-qualify every variable the designer can handle in person.
+
+## Phone-call clarifications (added for the AI phone desk; the five criteria above are unchanged)
+
+- Callers are heard through speech recognition, which makes mistakes ("boss" heard as "bot", "sixty" as "60 thousand"). A garbled or nonsensical answer is **unclear**, never a fail.
+- Unclear on 1, 2 or 3: ask once more in different words. If it is still unclear, forward the lead and note the uncertainty. Do not close the call on it.
+- Never end the call or say "this may not be the right fit" unless the caller has **clearly** failed: outside Pune and PCMC, a restaurant/hotel/retail/gym, advice only, or needed in under 6 weeks.
+- Ask one question at a time, and always collect an email for qualified callers so the designer can send the invite.
+- If a call ends early before the email was collected, the lead is still forwarded and the designer calls the client back.
