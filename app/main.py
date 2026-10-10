@@ -453,7 +453,14 @@ def cron_weekly(request: Request):
     from app import exports, integrations as integ
     m = EmailMessage(); m["From"] = config.STUDIO_EMAIL; m["To"] = config.STUDIO_HEAD_EMAIL
     m["Subject"] = "Aangan Enquiry Desk: weekly report"
-    m.set_content("This week's report is attached: a PDF summary and a CSV of every call.")
+    sx = stats.compute(); pp = sx["pipeline"]
+    brief, _ = db.kv_get("brief")
+    m.set_content("\n".join(["Hello,", "", "Your Aangan Studio weekly enquiry report is attached: a detailed PDF and a CSV of every call.", "", "THIS PERIOD AT A GLANCE",
+        f"  Calls handled: {sx['calls']} ({sx['qualified']} qualified, {sx['verdicts'].get('declined', 0)} declined, {sx['verdicts'].get('escalate', 0)} escalated, {sx['missed']} missed)",
+        f"  Qualified pipeline: Rs {pp['mid_lakh']} lakh (expected Rs {pp['expected_lakh']} lakh at {sx['settings']['close_rate_pct']}% close rate)",
+        f"  Answered within 5 minutes: {sx['within_5_min_pct']}%   Price figures spoken: {sx['price_leaks']}",
+        f"  Running cost: Rs {sx['cost_total_inr']} (Rs {sx['cost_per_qualified_inr']} per qualified lead)", "",
+        "LATEST EXECUTIVE BRIEF", (brief or "No brief written yet. Open the dashboard and press Write today's brief."), "", f"Live dashboard: {config.PUBLIC_URL}", "", "Aangan Enquiry Desk"]))
     m.add_attachment(exports.pdf_bytes(), maintype="application", subtype="pdf", filename="aangan-report.pdf")
     m.add_attachment(exports.csv_bytes(), maintype="text", subtype="csv", filename="aangan-calls.csv")
     r = integ._send(m, "weekly-report", config.now_ist().strftime("%Y%m%d"), True)
