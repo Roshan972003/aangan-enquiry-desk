@@ -9,7 +9,7 @@ def _caller_text(history):
 
 def respond(system, history, schema):
     if schema is None:
-        return "Headline: MOCK digest for plumbing tests.\nWins:\n- Calls answered quickly.\nLost leads:\n- Out-of-area enquiries declined.\nActions:\n- Call back the escalation."
+        return "Headline: MOCK digest for plumbing tests.\nWins:\n- Calls answered quickly.\nRisks:\n- One escalation open.\nLost leads:\n- Out-of-area enquiries declined.\nActions:\n- Desk: call back the escalation within 2 hours.\nOutlook:\n- Steady run-rate."
     props = (schema or {}).get("properties", {})
     if "matches" in props:
         return {"matches": []}

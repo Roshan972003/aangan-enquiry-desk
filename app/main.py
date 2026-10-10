@@ -317,18 +317,38 @@ def get_brief():
 
 @app.post("/api/brief")
 def make_brief():
-    """Daily executive digest for the founder, written by Gemini from the stats and the latest call gists."""
+    """Executive digest for the founder. Numbers are computed here (exact); Gemini writes the narrative from them and the latest call gists."""
     s = stats.compute()
-    calls = db.all_calls()[:40]
-    gists = "\n".join(f"- [{stats.eff_verdict(c)}] {c['gist']}" for c in calls)
-    slim = {"pipeline_lakh_mid": s["pipeline"]["mid_lakh"], "today": s["today"], **{k: s[k] for k in ("calls", "missed", "qualified", "median_answer_s", "within_5_min_pct", "containment_pct", "price_asked", "price_leaks",
-                              "cost_total_inr", "cost_per_qualified_inr", "time_saved_hours", "verdicts")}}
+    calls = db.all_calls()
+    gists = "\n".join(f"- {c['id']} [{stats.eff_verdict(c)}] {(c.get('lead') or {}).get('name') or c['caller_label']}: {c['gist']}" for c in calls[:40])
+    p, f, off = s["pipeline"], s["forecast"], s["offhour"]
+    dates = sorted(c["started_at"][:10] for c in calls)
+    span = f"{dates[0]} to {dates[-1]}" if dates else "-"
+    v = s["verdicts"]
+    flags = "; ".join(f"{r['id']} {r['kind']} ({r.get('name') or 'caller'})" for r in s["red_flags"][:8]) or "none"
+    snapshot = [
+        f"{s['calls']} calls handled ({span}); {s['qualified']} qualified, {v.get('declined', 0)} declined, {v.get('not_now', 0)} not now, {v.get('escalate', 0)} escalated, {s['missed']} missed",
+        f"Qualified pipeline Rs {p['mid_lakh']} lakh (range {p['low_lakh']} to {p['high_lakh']}); expected revenue Rs {p['expected_lakh']} lakh at {s['settings']['close_rate_pct']}% close rate",
+        f"Answered within 5 minutes: {s['within_5_min_pct']}% (median {s['median_answer_s']} s); {s['after_hours']} calls outside office hours",
+        f"Price questions: {s['price_asked']}, all steered to the free consultation; price figures spoken: {s['price_leaks']}",
+        f"Running cost Rs {s['cost_total_inr']} (Rs {s['cost_per_qualified_inr']} per qualified lead); front-desk time saved {s['time_saved_hours']} h",
+        f"Off-hours calls protected about Rs {off['saved_inr']:,} of revenue",
+        f"Month-end projection: about {f['projected_qualified_month']} qualified leads, Rs {f['projected_revenue_lakh']} lakh expected",
+    ]
+    ctx = {"today_date": config.now_ist().date().isoformat(), "calls_span": span, "stats_today": s["today"], "open_flags": flags}
     text, usage = gemini.generate(
-        "You write a short daily digest for the founder of an interior design studio about how the AI phone desk did. Plain text only, no markdown, "
-        "never mention any price per square foot. Use exactly this shape:\n"
-        "Headline: one sentence stating total calls, the qualified pipeline value in rupees (lakhs), how many were declined, and how many urgent escalations.\nWins:\n- two or three short bullets\nLost leads:\n- one to three short bullets on who was declined or missed and why\n"
-        "Actions:\n- two or three concrete things the team should do today, such as call back a named complaint or follow up a lead.",
-        [{"role": "user", "text": f"Stats: {slim}\n\nRecent call gists:\n{gists}"}], None, 0.3)
+        "You write the executive digest for the founder of Aangan Studio, an interior design studio in Pune, about how its AI phone desk is performing. "
+        "Plain text only, no markdown, no asterisks. Never mention any price per square foot or any quote given to a caller. "
+        "Do not call the period 'today' unless calls_span ends on today_date; otherwise say 'this period'. Use real caller names and call ids from the gists. "
+        "Use exactly these section labels, each on its own line, in this order:\n"
+        "Headline: two sentences. Sentence one says what the desk achieved (calls, qualified pipeline in lakhs). Sentence two says the single most important thing the founder must act on.\n"
+        "Wins:\n- three or four bullets, each naming a specific lead or behaviour and why it matters\n"
+        "Risks:\n- two or three bullets on escalations, unhappy callers or overdue follow-ups, naming the caller and call id\n"
+        "Lost leads:\n- one to three bullets on who was declined or missed and the reason, and whether a referral or reply was offered\n"
+        "Actions:\n- three or four bullets, each starting with an owner (Nikhil, designer, or desk) and a deadline such as 'within 2 hours' or 'by tomorrow'\n"
+        "Outlook:\n- one or two bullets on the month-end projection and what would improve it",
+        [{"role": "user", "text": f"Context: {ctx}\n\nExact numbers (do not change them): {snapshot}\n\nRecent call gists:\n{gists}"}], None, 0.3)
+    text = text.strip() + "\nSnapshot:\n" + "\n".join("- " + x for x in snapshot)
     now = config.now_ist().isoformat(timespec="seconds")
     db.kv_set("brief", text, now)
     return {"brief": text, "updated_at": now, "today": True}

@@ -13,7 +13,7 @@
   <div class="card digest">
     <div style="display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap"><h3>AI executive digest <span class="pill" style="background:var(--gold-soft);color:var(--warn)">Gemini</span></h3><span class="hint" id="brief-when"></span><button id="brief-btn" class="ghost">Write today's brief</button></div>
     <div class="live" id="live"></div>
-    <div id="brief" style="margin-top:6px"><span class="muted">No brief yet.</span></div>
+    <div id="brief" style="margin-top:6px"><span class="muted">No brief yet.</span></div><div id="brief-share" class="actions" style="margin-top:10px;align-items:center"></div>
   </div>
 
   <!-- 2. four metric cards -->
@@ -186,12 +186,27 @@ async function load(force){
   if(force){await fetch('/api/stats?t='+Date.now())}
   S=await (await fetch('/api/stats')).json();render();loadBrief(false);
 }
+const BSEC=['Snapshot','Wins','Risks','Lost leads','Actions','Outlook'];
+let briefParts=null,briefMeta=null;
+function parseBrief(t){const parts={hl:''};BSEC.forEach(k=>parts[k]=[]);let key='hl';
+  String(t).replace(/\*\*/g,'').split('\n').forEach(l=>{const m=l.match(/^(Headline|Snapshot|Wins|Risks|Lost leads|Actions|Outlook):\s*(.*)$/i);
+    if(m){const k=m[1].toLowerCase();key=k==='headline'?'hl':BSEC.find(x=>x.toLowerCase()===k);if(m[2]){if(key==='hl')parts.hl=m[2];else parts[key].push(m[2])}}
+    else if(l.trim()){if(key==='hl')parts.hl+=(parts.hl?' ':'')+l.trim();else parts[key].push(l.replace(/^[-•]\s*/,''))}});return parts}
+function briefText(){if(!briefParts)return'';const p=briefParts,d=(briefMeta&&briefMeta.updated_at||'').replace('T',' ').slice(0,16);
+  return ['AANGAN STUDIO: EXECUTIVE BRIEF','Phone enquiries, generated '+d+' IST','',p.hl,''].concat(...['Snapshot','Wins','Risks','Lost leads','Actions','Outlook'].filter(k=>p[k].length).map(k=>[k.toUpperCase()].concat(p[k].map(x=>'- '+x),[''])),['Live dashboard: '+location.origin]).join('\n')}
 function showBrief(b){
-  if(!b.brief){$('brief').innerHTML='<span class="muted">No brief yet.</span>';return}
-  const t=String(b.brief).replace(/\*\*/g,''),parts={hl:'',Wins:[],'Lost leads':[],Actions:[]};let key='hl';
-  t.split('\n').forEach(l=>{const m=l.match(/^(Headline|Wins|Lost leads|Actions):\s*(.*)$/i);if(m){const k=m[1].toLowerCase();key=k==='headline'?'hl':k==='wins'?'Wins':k==='actions'?'Actions':'Lost leads';if(m[2]){if(key==='hl')parts.hl=m[2];else parts[key].push(m[2])}}else if(l.trim()){if(key==='hl')parts.hl+=(parts.hl?' ':'')+l.trim();else parts[key].push(l.replace(/^[-•]\s*/,''))}});
-  $('brief').innerHTML=`<div class="hl">${esc(parts.hl||t.split('\n')[0])}</div>${['Wins','Lost leads','Actions'].map(k=>parts[k].length?`<h4>${k}</h4><ul>${parts[k].map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'').join('')}`;
+  if(!b.brief){$('brief').innerHTML='<span class="muted">No brief yet.</span>';$('brief-share').innerHTML='';return}
+  briefParts=parseBrief(b.brief);briefMeta=b;const P=briefParts;
+  $('brief').innerHTML=`<div class="hl">${esc(P.hl||String(b.brief).split('\n')[0])}</div>${BSEC.filter(k=>P[k].length).map(k=>`<h4>${k}</h4><ul>${P[k].map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`).join('')}`;
   $('brief-when').textContent=(b.today?'Today · ':'')+'updated '+b.updated_at.replace('T',' ');
+  $('brief-share').innerHTML='<span class="hint">Share this brief</span><button class="ghost" id="bs-copy">Copy</button><button class="ghost" id="bs-wa">WhatsApp</button><button class="ghost" id="bs-mail">Email</button>'+(navigator.share?'<button class="ghost" id="bs-share">Share…</button>':'')+'<button class="ghost" id="bs-dl">Download</button><button class="ghost" id="bs-print">Print / PDF</button>';
+  const subj='Aangan Studio executive brief';
+  $('bs-copy').onclick=async()=>{try{await navigator.clipboard.writeText(briefText());toast('Brief copied')}catch(e){const t=document.createElement('textarea');t.value=briefText();document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();toast('Brief copied')}};
+  $('bs-wa').onclick=()=>window.open('https://wa.me/?text='+encodeURIComponent(briefText()),'_blank','noopener');
+  $('bs-mail').onclick=()=>{location.href='mailto:?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(briefText())};
+  if($('bs-share'))$('bs-share').onclick=()=>navigator.share({title:subj,text:briefText()}).catch(()=>{});
+  $('bs-dl').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([briefText()],{type:'text/plain'}));a.download='aangan-brief-'+(b.updated_at||'').slice(0,10)+'.txt';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)};
+  $('bs-print').onclick=()=>{const w=window.open('','_blank');if(!w){toast('Allow pop-ups to print');return}w.document.write('<title>'+subj+'</title><body style="font:14px/1.5 system-ui;max-width:720px;margin:32px auto;color:#111"><h2>Aangan Studio: executive brief</h2><p style="color:#666">Generated '+esc((b.updated_at||'').replace('T',' ').slice(0,16))+' IST</p>'+$('brief').innerHTML+'<p style="color:#666">Live dashboard: '+esc(location.origin)+'</p></body>');w.document.close();w.focus();setTimeout(()=>w.print(),300)};
 }
 async function loadBrief(make){
   const b=await (await fetch('/api/brief')).json();showBrief(b);
