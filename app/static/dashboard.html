@@ -80,7 +80,7 @@ const sentTag=(sc,lab)=>sc==null?'<span class="sent none" title="Not rated yet">
 const lvlTag=l=>l==='light'?'ok':l==='heavy'?'bad':'';
 const wlOf=n=>((S.workload&&S.workload.designers||[]).find(d=>d.name===n)||{});
 const shortName=n=>String(n||'').replace(' (placeholder)','');
-const mmss=t=>t==null||t===''?'':Math.floor(t/60)+':'+String(Math.floor(t%60)).padStart(2,'0');
+const mmss=t=>{if(t==null||t==='')return '';t=Math.max(0,Math.floor(t));if(t>=3600)return Math.floor(t/3600)+'h '+String(Math.floor(t%3600/60)).padStart(2,'0')+'m';return Math.floor(t/60)+':'+String(t%60).padStart(2,'0')};
 function countTo(el,from,to,fmt){const t0=performance.now(),dur=900;function step(t){const k=Math.min(1,(t-t0)/dur),e=1-Math.pow(1-k,3);el.textContent=fmt(from+(to-from)*e);if(k<1)requestAnimationFrame(step)}requestAnimationFrame(step)}
 let liveT=null,liveOn=false;try{liveOn=localStorage.getItem('aangan-live')==='1'}catch(e){}
 function setLive(on){liveOn=on;clearInterval(liveT);clearInterval(pollT);if(on){liveT=setInterval(()=>{if(!document.hidden)load(true)},60000);pollT=setInterval(()=>{if(!document.hidden)pollLive()},10000)}try{localStorage.setItem('aangan-live',on?'1':'0')}catch(e){}}
