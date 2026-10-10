@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "index.py": {
+      "maxDuration": 60,
+      "includeFiles": "{app/static/**,knowledge/**,designers.json}"
+    }
+  }
+}

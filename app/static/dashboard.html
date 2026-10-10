@@ -1,0 +1,59 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Aangan Enquiry Desk</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/static/style.css"></head><body>
+<div class="nav"><b>Aangan Enquiry Desk</b><a class="on" href="/">Dashboard</a><a href="/simulator">Call simulator</a><button class="ghost" id="refresh" style="padding:5px 10px">Refresh</button></div>
+<div class="wrap">
+  <div><div class="eyebrow">Phone channel · live from the call log</div><h2 style="font-size:26px;margin-top:4px">What came in, how fast, what it cost</h2></div>
+  <div id="empty" class="card" hidden>No calls yet. Run a call in the <a href="/simulator">simulator</a>, or load the September transcripts with <span class="mono">python replay.py</span>.</div>
+  <div class="grid g4" id="kpis"></div>
+  <div class="card" style="border-color:var(--gold)"><div style="display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap"><h3>The gist <span class="pill" style="background:var(--gold-soft);color:var(--warn)">Gemini</span></h3><span class="hint" id="brief-when"></span><button id="brief-btn" class="ghost">Refresh brief</button></div><div id="brief" style="margin-top:8px;white-space:pre-line">No brief yet.</div></div>
+  <div class="grid g2"><div class="card"><h3>Calls per day</h3><p class="hint">Grey: all calls. Purple: qualified and sent to a designer.</p><div id="days"></div></div>
+  <div class="card"><h3>Outcomes</h3><div class="funnel" id="funnel"></div></div></div>
+  <div class="grid g3"><div class="card"><h3>When calls arrive</h3><p class="hint">Gold hours are outside the front desk's 10am to 7pm.</p><div id="hours"></div></div>
+  <div class="card"><h3>Cost to run</h3><p class="hint">Estimated from token usage and the rates in .env.</p><div id="costs"></div></div>
+  <div class="card"><h3>Connections</h3><div id="conn" style="display:flex;flex-direction:column;gap:8px"></div></div></div>
+  <div class="card"><h3 style="margin-bottom:8px">Recent calls</h3><div class="tablewrap"><table><thead><tr><th>Time</th><th>Caller</th><th>Verdict</th><th>Gist</th><th>Answered in</th><th>HubSpot</th><th>Designer</th><th>Invite</th><th>Cost</th></tr></thead><tbody id="rows"></tbody></table></div></div>
+</div>
+<div class="drawer" id="drawer" hidden></div>
+<script>
+const $=id=>document.getElementById(id), inr=x=>'₹'+(+x).toLocaleString('en-IN',{maximumFractionDigits:2});
+const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const mode=m=>m==='live'?'<span class="ok">Live</span>':m==='outbox'?'<span class="muted">Saved locally</span>':m==='skipped'||!m?'<span class="no">None</span>':'<span style="color:var(--bad)">Error</span>';
+async function load(){
+  const s=await (await fetch('/api/stats')).json();
+  $('empty').hidden=s.calls>0;
+  const k=[['Calls handled',s.calls,`${s.missed} missed, AI callback queued`],['Median time to answer',s.median_answer_s==null?'-':s.median_answer_s+' s',(s.within_5_min_pct??'-')+'% within 5 minutes'],
+   ['Sent to designers',s.qualified,s.calls?Math.round(100*s.qualified/s.calls)+'% of calls':''],['Calendar invites',s.invites,'client invites created'],
+   ['After-hours calls',s.after_hours,'outside 10am to 7pm, all answered'],['Price questions deflected',s.price_asked,'no price figures given'],
+   ['Run cost',inr(s.cost_total_inr),inr(s.cost_per_call_inr)+' per call'],['Cost per qualified lead',s.cost_per_qualified_inr==null?'-':inr(s.cost_per_qualified_inr),'≈ ₹'+s.pipeline_lakh+' L project value at ₹11 L average']];
+  $('kpis').innerHTML=k.map((x,i)=>`<div class="card kpi ${i>5?'cost':''}"><span class="l">${x[0]}</span><span class="v">${x[1]}</span><span class="s">${x[2]}</span></div>`).join('');
+  // days
+  const d=s.days.slice(-30),W=620,H=170,mx=Math.max(1,...d.map(x=>x.calls))+1,bw=(W-24)/Math.max(d.length,1);let g='';
+  d.forEach((x,i)=>{const bx=24+i*bw+bw*.15,w=bw*.7,h=(H-24)*x.calls/mx,q=(H-24)*x.qualified/mx;
+   g+=`<rect x="${bx}" y="${H-18-h}" width="${w}" height="${h}" rx="2" fill="var(--surface2)"/><rect x="${bx}" y="${H-18-q}" width="${w}" height="${q}" rx="2" fill="var(--accent)"/>`;
+   if(d.length<12||i%3==0)g+=`<text x="${bx+w/2}" y="${H-4}" text-anchor="middle">${x.date.slice(8)}</text>`});
+  g+=`<text x="0" y="12">${mx-1}</text><text x="0" y="${H-18}">0</text>`;
+  $('days').innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Calls per day">${g}</svg>`;
+  const v=s.verdicts,tot=Math.max(s.calls,1);
+  $('funnel').innerHTML=[['Qualified','qualified'],['Declined','declined'],['Not now','not_now'],['Escalated','escalate'],['Missed','missed']].map(([l,key])=>`<div class="r"><span>${l}</span><div class="b"><i style="width:${100*(v[key]||0)/tot}%"></i></div><span class="mono" style="text-align:right">${v[key]||0}</span></div>`).join('');
+  const hm=Math.max(1,...s.hours);let hg='';s.hours.forEach((n,h)=>{const bh=110*n/hm,ooh=h<10||h>=19;hg+=`<rect x="${h*12.5+1}" y="${125-bh}" width="10.5" height="${bh}" rx="1.5" fill="${ooh?'var(--gold)':'var(--accent)'}"/>`;if(h%6==0)hg+=`<text x="${h*12.5}" y="140">${h}h</text>`});
+  $('hours').innerHTML=`<svg viewBox="0 0 300 146" width="100%" role="img" aria-label="Calls by hour">${hg}</svg>`;
+  const c=s.cost_components,ct=Math.max(s.cost_total_inr,.01);
+  $('costs').innerHTML=[['Gemini (agent + gist)',c.gemini],['Telephony minutes',c.telephony],['Speech in and out',c.speech]].map(([l,x])=>`<div style="margin:8px 0"><div style="display:flex;justify-content:space-between"><span>${l}</span><span class="mono">${inr(x)}</span></div><div class="funnel"><div class="b" style="height:8px"><i style="width:${100*x/ct}%;background:var(--gold)"></i></div></div></div>`).join('')+`<div class="hint">Total ${inr(s.cost_total_inr)} for ${s.calls} calls.</div>`;
+  const h=await (await fetch('/api/health')).json();
+  $('conn').innerHTML=[['Gemini',h.llm],['HubSpot',h.hubspot?'connected':'not connected, saving locally'],['Email + invites',h.smtp?'connected':'not connected, saving .eml/.ics locally'],['Voice platform (Vaani)',h.vaani_key_set?'key stored, not wired yet':'no key']].map(([a,b])=>`<div style="display:flex;justify-content:space-between;gap:10px"><b>${a}</b><span class="muted" style="text-align:right">${esc(b)}</span></div>`).join('');
+  $('rows').innerHTML=s.recent.map(r=>`<tr class="row" data-id="${r.id}"><td class="mono">${new Date(r.started_at).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}${r.in_hours?'':' <span style="color:var(--gold)">after hours</span>'}</td><td>${esc(r.caller)}${r.source==='replay'?' <span class="hint">(replay)</span>':''}</td><td><span class="pill p-${r.verdict}">${r.verdict.replace('_',' ')}</span></td><td style="min-width:260px;white-space:normal;color:var(--muted)">${esc(r.gist)}</td><td class="mono">${r.answer_s??'-'} s</td><td>${mode(r.hubspot)}</td><td>${mode(r.designer_email)}</td><td>${mode(r.invite)}</td><td class="mono">${inr(r.cost_inr)}</td></tr>`).join('');
+  document.querySelectorAll('tr.row').forEach(tr=>tr.onclick=()=>openCall(tr.dataset.id));
+  const b=await (await fetch('/api/brief')).json();if(b.brief){$('brief').textContent=b.brief;$('brief-when').textContent='Updated '+b.updated_at.replace('T',' ')}
+}
+async function openCall(id){
+  const c=await (await fetch('/api/calls/'+id)).json(),r=c.result||{},i=c.integrations||{};
+  const crit=(r.criteria||[]).map(x=>`<li><b>${esc(x.id)}</b>: ${x.status} <span class="muted">${esc(x.evidence)}</span></li>`).join('');
+  const ints=Object.entries(i).map(([k,v])=>`<h4 style="margin:12px 0 2px">${k.replace(/_/g,' ')} <span class="hint">${esc(v.status||'')}</span></h4>${v.body?`<pre>${esc((v.subject?'Subject: '+v.subject+'\n':'')+(v.to?'To: '+v.to+'\n\n':'')+v.body)}</pre>`:''}${v.ics?`<pre>${esc(v.ics)}</pre>`:''}`).join('');
+  $('drawer').hidden=false;$('drawer').innerHTML=`<button class="ghost" onclick="$('drawer').hidden=true">Close</button><h3 style="margin-top:12px">${esc(c.caller_label)} <span class="pill p-${c.verdict}">${c.verdict}</span></h3><p>${esc(c.gist)}</p><h4>Rubric</h4><ul>${crit}</ul>${ints}<h4>Transcript</h4><pre>${esc((c.transcript||[]).map(t=>t.who.toUpperCase()+': '+t.text).join('\n'))}</pre>`;
+}
+$('refresh').onclick=()=>{last=Date.now();load()};
+$('brief-btn').onclick=async()=>{$('brief-btn').disabled=true;$('brief').textContent='Writing…';const r=await fetch('/api/brief',{method:'POST'});const j=await r.json();$('brief').textContent=j.brief||j.error;$('brief-btn').disabled=false;load()};
+load();let last=Date.now();document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Date.now()-last>60000){last=Date.now();load()}});
+</script></body></html>

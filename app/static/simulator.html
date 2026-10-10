@@ -1,0 +1,61 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Aangan Call Simulator</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/static/style.css">
+<style>
+.chat{display:flex;flex-direction:column;gap:8px;height:min(52vh,460px);overflow:auto;padding:4px}
+.b{max-width:82%;padding:9px 12px;border-radius:12px;font-size:14px}.b.agent{align-self:flex-start;background:var(--accent-soft)}.b.caller{align-self:flex-end;background:var(--surface2)}
+.b small{display:block;font:500 10px var(--m);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
+.ctrl{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.ctrl input[type=text]{flex:1;min-width:160px}
+.lead dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0;font-size:13px}.lead dt{font:11px var(--m);color:var(--muted)}.lead dd{margin:0}
+.mic.on{background:var(--bad)}
+</style></head><body>
+<div class="nav"><b>Aangan Enquiry Desk</b><a href="/">Dashboard</a><a class="on" href="/simulator">Call simulator</a></div>
+<div class="wrap">
+  <div><div class="eyebrow">Incoming phone call, simulated in the browser</div><h2 style="font-size:26px;margin-top:4px">Talk to the studio line</h2>
+  <p class="muted" style="max-width:70ch">You are the caller. Speak with the mic or type. When the call ends, the full pipeline runs: judgement, gist, HubSpot record, designer email and client calendar invite.</p></div>
+  <div class="grid g2">
+    <div class="card" style="display:flex;flex-direction:column;gap:10px">
+      <div class="ctrl"><label class="hint" for="when">Pretend it is</label>
+        <select id="when"><option value="">now</option><option value="23:15">11:15 pm (after hours)</option><option value="08:30">8:30 am (before opening)</option><option value="14:10">2:10 pm (desk open)</option></select>
+        <button id="start">Start call</button><button id="end" class="danger" disabled>Hang up</button><span id="state" class="hint"></span></div>
+      <div class="chat" id="chat" aria-live="polite"></div>
+      <div class="ctrl"><input type="text" id="msg" placeholder="Type what the caller says" disabled><button id="send" disabled>Send</button><button id="mic" class="ghost mic" disabled title="Speak">Mic</button><label class="hint"><input type="checkbox" id="tts" checked> agent speaks</label></div>
+      <div class="hint">Try: a Baner 3BHK full redesign, then ask "how much per sq ft?". Then try Nashik, a restaurant, or "I only want ideas".</div>
+    </div>
+    <div class="card lead"><h3>What the agent has learned</h3><dl id="lead"><dt>nothing yet</dt><dd></dd></dl><div id="slots" class="hint" style="margin-top:10px"></div></div>
+  </div>
+  <div class="card" id="result" hidden></div>
+</div>
+<script>
+const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+let cid=null,rec=null,busy=false;
+function add(who,text){const d=document.createElement('div');d.className='b '+who;d.innerHTML=`<small>${who==='agent'?'Aangan':'Caller'}</small>${esc(text)}`;$('chat').appendChild(d);$('chat').scrollTop=1e9}
+function say(t){if(!$('tts').checked||!window.speechSynthesis)return;speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang='en-IN';speechSynthesis.speak(u)}
+function lead(l){const e=Object.entries(l||{}).filter(([,v])=>v!=null&&v!=='');$('lead').innerHTML=e.length?e.map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join(''):'<dt>nothing yet</dt><dd></dd>'}
+async function api(p,b){const r=await fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});const j=await r.json();if(!r.ok)throw new Error(j.error||j.detail||r.status);return j}
+$('start').onclick=async()=>{
+  $('chat').innerHTML='';$('result').hidden=true;lead({});$('state').textContent='Ringing…';$('start').disabled=true;
+  let ct=null;const w=$('when').value;if(w){const d=new Date();const[h,m]=w.split(':');d.setHours(+h,+m,0,0);ct=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+'T'+w+':00'}
+  try{const j=await api('/api/call/start',{call_time:ct});cid=j.call_id;add('agent',j.reply);say(j.reply);$('slots').innerHTML='Slots the agent can offer: '+j.slots.slice(0,4).map(s=>esc(s.label)).join(' · ');
+   $('state').textContent='On call';['end','msg','send','mic'].forEach(i=>$(i).disabled=false);$('msg').focus()}
+  catch(e){$('state').textContent='';add('agent','Could not start: '+e.message);$('start').disabled=false}};
+async function send(text){if(!text||busy||!cid)return;busy=true;add('caller',text);$('msg').value='';
+  try{const j=await api('/api/call/turn',{call_id:cid,text});add('agent',j.reply);say(j.reply);lead(j.lead);if(j.status!=='continue'){setTimeout(hang,1200)}}
+  catch(e){add('agent','Error: '+e.message)}busy=false}
+$('send').onclick=()=>send($('msg').value.trim());$('msg').onkeydown=e=>{if(e.key==='Enter')send($('msg').value.trim())};
+async function hang(){if(!cid)return;const id=cid;cid=null;['end','msg','send','mic'].forEach(i=>$(i).disabled=true);$('state').textContent='Processing the call…';
+  try{rec=await api('/api/call/end',{call_id:id});show(rec)}catch(e){$('state').textContent='';add('agent','Error ending call: '+e.message)}
+  $('state').textContent='Call ended';$('start').disabled=false}
+$('end').onclick=hang;
+function show(c){const r=c.result,i=c.integrations;$('result').hidden=false;
+  const crit=(r.criteria||[]).map(x=>`<li><b>${esc(x.id)}</b>: ${x.status} <span class="muted">${esc(x.evidence)}</span></li>`).join('');
+  const ints=Object.entries(i).map(([k,v])=>`<div class="card" style="padding:12px"><h4 style="margin:0">${k.replace(/_/g,' ')}</h4><div class="hint">${esc(v.status||'')}</div>${v.body?`<pre>${esc((v.subject?'Subject: '+v.subject+'\n':'')+(v.to?'To: '+v.to+'\n\n':'')+v.body)}</pre>`:''}${v.ics?`<details><summary class="hint">Calendar invite (.ics)</summary><pre>${esc(v.ics)}</pre></details>`:''}</div>`).join('');
+  $('result').innerHTML=`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h3>Call result</h3><span class="pill p-${c.verdict}">${c.verdict.replace('_',' ')}</span><span class="hint">cost ₹${c.cost_inr} · ${c.cost.tokens_in+c.cost.tokens_out} tokens · answered in ${c.ring_to_answer_s}s</span></div><p style="font-size:15px">${esc(c.gist)}</p>${c.slot?`<p><b>Booked:</b> ${esc(c.slot.label)} with ${esc(c.slot.designer)}</p>`:''}<h4>Rubric</h4><ul>${crit}</ul><div class="grid g3">${ints}</div><p><a href="/">See it on the dashboard</a></p>`;
+  $('result').scrollIntoView({behavior:'smooth'})}
+// browser speech recognition (Chrome)
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let rc=null;
+$('mic').onclick=()=>{if(!SR){add('agent','Speech input needs Chrome. Type instead.');return}
+  if(rc){rc.stop();return}rc=new SR();rc.lang='en-IN';rc.interimResults=false;$('mic').classList.add('on');
+  rc.onresult=e=>send(e.results[0][0].transcript);rc.onend=()=>{rc=null;$('mic').classList.remove('on')};rc.start()};
+</script></body></html>

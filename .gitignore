@@ -1,0 +1,5 @@
+.venv/
+.env
+data/aangan.db
+outbox/
+__pycache__/

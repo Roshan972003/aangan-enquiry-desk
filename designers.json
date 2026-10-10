@@ -1,0 +1,5 @@
+[
+  {"name": "Designer A (placeholder)", "email": "designer-a@example.com", "commercial": false},
+  {"name": "Designer B (placeholder)", "email": "designer-b@example.com", "commercial": false},
+  {"name": "Designer C (placeholder)", "email": "designer-c@example.com", "commercial": true}
+]
