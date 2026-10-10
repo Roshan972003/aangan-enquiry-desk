@@ -90,9 +90,18 @@ def _resend(msg: EmailMessage):
     """Send through the Resend HTTP API. Without a verified domain Resend only delivers to the account owner's own address."""
     import base64
     body = msg.get_body(preferencelist=("plain",))
-    payload = {"from": config.RESEND_FROM, "to": [a.strip() for a in str(msg["To"]).split(",") if a.strip()], "subject": str(msg["Subject"]),
-               "text": body.get_content() if body else ""}
-    if msg["Cc"]: payload["cc"] = [a.strip() for a in str(msg["Cc"]).split(",") if a.strip()]
+    to = [a.strip() for a in str(msg["To"]).split(",") if a.strip()]
+    cc = [a.strip() for a in str(msg["Cc"]).split(",") if a.strip()] if msg["Cc"] else []
+    text, subject = (body.get_content() if body else ""), str(msg["Subject"])
+    if "resend.dev" in config.RESEND_FROM:
+        # No verified domain yet: Resend only delivers to the account owner, so send a test copy there and say who it was meant for.
+        owner = config.STUDIO_HEAD_EMAIL
+        if [a for a in to + cc if a.lower() != owner.lower()]:
+            text = f"[TEST COPY. Resend has no verified domain yet, so this went to you instead of: To {', '.join(to)}" + (f"; Cc {', '.join(cc)}" if cc else "") + "]\n\n" + text
+            subject = "[Test copy] " + subject
+        to, cc = [owner], []
+    payload = {"from": config.RESEND_FROM, "to": to, "subject": subject, "text": text}
+    if cc: payload["cc"] = cc
     atts = [{"filename": p.get_filename() or "attachment", "content": base64.b64encode(p.get_payload(decode=True)).decode()} for p in msg.iter_attachments()]
     if atts: payload["attachments"] = atts
     r = httpx.post("https://api.resend.com/emails", json=payload, headers={"Authorization": f"Bearer {config.RESEND_API_KEY}"}, timeout=20)
@@ -149,12 +158,45 @@ def cal_book(call_id, lead, slot, result):
     return {"mode": "live", "status": "booked on Cal.com, invite emailed by Cal.com", "booking_uid": d.get("uid"), "to": lead["email"],
             "subject": "Aangan design consultation, " + slot["label"], "body": f"Booking {d.get('uid')} confirmed for {slot['label']}. Cal.com sent the client a confirmation with the calendar invite."}
 
+def client_message(call_id, lead, slot, result=None):
+    """The studio's own confirmation email to the client (separate from the Cal.com calendar invite). Returns (EmailMessage, body)."""
+    first = (lead.get("name") or "").split(" ")[0] or "there"
+    r = result or {}
+    when = slot["label"] if slot else None
+    bits = [x for x in (lead.get("scope"), (f"{int(lead['sqft'])} sq ft" if lead.get("sqft") else None), lead.get("location")) if x]
+    lines = [f"Hello {first},", "", "Thank you for calling Aangan Studio. It was a pleasure speaking with you.", ""]
+    if bits: lines += ["What we noted from our call:", "  Project: " + ", ".join(bits)] + ([f"  Timeline: {lead['timeline']}"] if lead.get("timeline") else []) + [""]
+    if when:
+        lines += [f"Your free design consultation: {when}" + (f" with {slot['designer']}" if slot.get("designer") else ""),
+                  "A calendar invite has been sent separately. If you cannot see it, please check your spam folder.", ""]
+    else:
+        lines += ["One of our designers will call you shortly to agree a time for your free design consultation.", ""]
+    lines += ["What to expect: your designer will listen to your ideas, look at the space and talk through the scope and approach.",
+              "Pricing depends on the site, the materials and the scope, so your designer will walk you through it in detail at the consultation.",
+              "It helps to bring floor plans or photos of the space and any inspiration you like.", "",
+              "Need a different time? Just reply to this email.", "", "Warm regards,", "Aangan Studio, Pune"]
+    body = "\n".join(lines)
+    m = EmailMessage(); m["From"] = config.STUDIO_EMAIL; m["To"] = lead.get("email") or config.STUDIO_HEAD_EMAIL
+    m["Subject"] = f"Your free design consultation with Aangan Studio" + (f", {when}" if when else "")
+    m.set_content(body)
+    return m, body
+
+def send_client_email(call_id, lead, slot, live=True, result=None):
+    m, body = client_message(call_id, lead, slot, result)
+    if not lead.get("email"):
+        return {"mode": "draft", "status": "draft only: the caller's email was not captured, so the designer will collect it on the call-back", "subject": m["Subject"], "to": "(email not captured)", "body": body}
+    r = _send(m, "client-email", call_id, live); r.update({"to": lead["email"], "subject": m["Subject"], "body": body}); return r
+
 def client_invite(call_id, lead, slot, live=True, result=None):
     if not (lead.get("email") and slot):
-        return {"mode": "skipped", "status": "no client email or no slot, nothing to invite"}
+        d = send_client_email(call_id, lead, slot, False, result)
+        return {"mode": "skipped", "status": "no client email or no slot, so no calendar invite was sent. Draft message below.", "subject": d["subject"], "to": d["to"], "body": d["body"]}
     if live and config.LIVE_INTEGRATIONS and slot.get("source") == "cal" and config.env("CAL_API_KEY"):
         try:
-            return cal_book(call_id, lead, slot, result or {})
+            res = cal_book(call_id, lead, slot, result or {})
+            mail = send_client_email(call_id, lead, slot, live, result)
+            res.update({"to": lead["email"], "subject": mail["subject"], "body": mail["body"], "status": f"{res.get('status', '')}. Studio confirmation email: {mail['status']}"})
+            return res
         except Exception as e:
             err = str(e).replace(config.env("CAL_API_KEY"), "***")
             fallback = _client_invite_ics(call_id, lead, slot, live)

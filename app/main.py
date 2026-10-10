@@ -145,6 +145,21 @@ def assign(cid: str, b: AssignIn, request: Request):
     db.audit_add(cid, "assign", {"from": before, "to": d["name"]}, _actor(request))
     return {"ok": True, "email": mail.get("status")}
 
+@app.post("/api/calls/{cid}/client-email")
+def client_email(cid: str):
+    """Compose (and send, when email is live) the studio's confirmation email to the client."""
+    from app import integrations as integ
+    c = db.get_call(cid)
+    if not c: raise HTTPException(404, "call not found")
+    lead = c.get("lead") or {}
+    r = integ.send_client_email(cid, lead, c.get("slot"), True, c.get("result"))
+    ints = c.get("integrations") or {}
+    ints["client_email"] = {k: v for k, v in r.items() if k != "file"}
+    c["integrations"] = ints; db.save_call(c)
+    db.audit_add(cid, "client_email", r.get("status", "")[:120], "dashboard")
+    stats.invalidate()
+    return {"ok": True, "message": r["status"], "to": r.get("to")}
+
 @app.post("/api/calls/{cid}/email")
 def email_lead(cid: str, request: Request):
     """Resend the lead summary to the designer (the assigned one, or the first on the list) by email."""
