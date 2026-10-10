@@ -78,3 +78,32 @@ def match_slot(iso: str):
                 return {"id": 0, "start": t.isoformat(), "label": t.strftime("%A %d %B, %I:%M %p").replace(" 0", " "),
                         "designer": "Aangan designer", "designer_email": DESIGNERS[0]["email"], "source": "cal"}
     return None
+
+
+def nearest_slot(iso=None):
+    """Free Cal.com slot closest to the time the caller prefers, or the earliest free slot when they gave none."""
+    k, et = config.env("CAL_API_KEY"), config.env("CAL_EVENT_TYPE_ID")
+    if not (k and et):
+        return None
+    tz = timezone(timedelta(hours=5, minutes=30))
+    now = config.now_ist().replace(tzinfo=tz)
+    want = None
+    if iso:
+        try:
+            want = datetime.fromisoformat(iso)
+            if want.tzinfo is None:
+                want = want.replace(tzinfo=tz)
+        except ValueError:
+            want = None
+    start_day = max((want or now).astimezone(tz).date() - timedelta(days=1), (now + timedelta(days=1)).date())
+    r = httpx.get("https://api.cal.com/v2/slots", headers={"Authorization": f"Bearer {k}", "cal-api-version": "2024-09-04"},
+                  params={"eventTypeId": et, "start": start_day.isoformat(), "end": (start_day + timedelta(days=8)).isoformat(), "timeZone": "Asia/Kolkata"}, timeout=20)
+    if r.status_code != 200:
+        return None
+    cands = [datetime.fromisoformat(i["start"]) for _, items in sorted(r.json().get("data", {}).items()) for i in items]
+    cands = [c for c in cands if c > now + timedelta(hours=3)]
+    if not cands:
+        return None
+    best = min(cands, key=lambda c: abs((c - want).total_seconds())) if want else cands[0]
+    return {"id": 0, "start": best.isoformat(), "label": best.strftime("%A %d %B, %I:%M %p").replace(" 0", " "),
+            "designer": "Aangan designer", "designer_email": DESIGNERS[0]["email"], "source": "cal"}
