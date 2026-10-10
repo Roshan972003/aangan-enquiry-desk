@@ -1,7 +1,7 @@
 """CSV and PDF reports for the owner."""
 import csv, io
 from datetime import datetime
-from app import stats, db
+from app import config, stats, db
 
 def csv_bytes():
     out = io.StringIO(); w = csv.writer(out)
@@ -29,7 +29,7 @@ def pdf_bytes():
         t.setStyle(TableStyle([("FONTSIZE", (0, 0), (-1, -1), 9), ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#CCCCCC")),
                                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#EEEAF8")), ("VALIGN", (0, 0), (-1, -1), "TOP")]))
         return t
-    el = [Paragraph("Aangan Studio - Enquiry Desk report", st["Title"]), Paragraph(datetime.now().strftime("Generated %d %B %Y, %H:%M"), st["Normal"]), Spacer(1, 10)]
+    el = [Paragraph("Aangan Studio - Enquiry Desk report", st["Title"]), Paragraph(config.now_ist().strftime("Generated %d %B %Y, %H:%M"), st["Normal"]), Spacer(1, 10)]
     el += [Paragraph("Headline numbers", st["Heading2"]), tbl([
         ["Calls handled", s["calls"], "Qualified leads", s["qualified"]],
         ["Answered within 5 min", f"{s['within_5_min_pct']}%" if s["within_5_min_pct"] is not None else "-", "Handled by the AI", f"{s['containment_pct']}%" if s["containment_pct"] is not None else "-"],

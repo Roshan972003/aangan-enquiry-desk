@@ -5,7 +5,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from app import agent, db, stats, config, gemini
+from app import config, agent, db, stats, config, gemini
 from app.vaani import router as vaani_router
 
 app = FastAPI(title="Aangan Enquiry Desk")
@@ -56,7 +56,7 @@ def health():
 
 @app.post("/api/call/start")
 def call_start(b: StartIn):
-    when = datetime.fromisoformat(b.call_time) if b.call_time else datetime.now()
+    when = datetime.fromisoformat(b.call_time) if b.call_time else config.now_ist()
     cid, reply, slots = agent.start_call(b.caller_label, when)
     return {"call_id": cid, "reply": reply, "slots": slots}
 
@@ -82,6 +82,8 @@ def call_get(cid: str):
     c["stage"] = stats.stage_of(c)
     c["has_audio"] = bool(c.get("external_id")) and bool(config.env("VAANI_API_KEY"))
     c["audit"] = db.audit_list(cid, 30)
+    if c["effective_verdict"] == "qualified":
+        c["win"], c["win_why"] = stats.win_chance(c)
     return c
 
 class StageIn(BaseModel):
@@ -156,7 +158,7 @@ def email_lead(cid: str, request: Request):
     mail = integ.designer_email(cid, c.get("lead") or {}, c.get("result") or {}, slot if c.get("slot") else None, text, True)
     sent = mail.get("mode") == "live"
     db.audit_add(cid, "email", {"to": mail.get("to"), "message": mail.get("status")}, _actor(request))
-    db.update_ops(cid, {"emailed": datetime.now().isoformat(timespec="seconds"), "assigned_to": d["name"]})
+    db.update_ops(cid, {"emailed": config.now_ist().isoformat(timespec="seconds"), "assigned_to": d["name"]})
     return JSONResponse({"ok": sent, "message": ("Emailed " + str(mail.get("to"))) if sent else "Saved, not sent: Gmail is not connected yet (" + str(mail.get("status")) + ")"})
 
 @app.post("/api/calls/{cid}/auto-assign")
@@ -185,6 +187,67 @@ def balance_workload(request: Request):
             moved += 1
     return {"ok": True, "assigned": moved}
 
+@app.post("/api/calls/{cid}/touch")
+def touch(cid: str, request: Request):
+    """Record that a designer has made first contact with the lead."""
+    _must(cid)
+    db.update_ops(cid, {"first_touch": config.now_ist().isoformat(timespec="seconds")})
+    db.audit_add(cid, "first_touch", {"message": "marked contacted"}, _actor(request))
+    return {"ok": True}
+
+@app.get("/api/lead/{cid}/accept")
+def lead_accept(cid: str, t: str = ""):
+    """One-click link in the designer email."""
+    from app import links
+    from fastapi.responses import HTMLResponse
+    if not links.ok(cid, "accept", t):
+        raise HTTPException(403, "This link is not valid")
+    c = _must(cid)
+    first = not (c.get("ops") or {}).get("first_touch")
+    if first:
+        db.update_ops(cid, {"first_touch": config.now_ist().isoformat(timespec="seconds"), "accepted": True})
+        db.audit_add(cid, "first_touch", {"message": "designer accepted the lead from the email"}, "designer (email link)")
+    who = (c.get("lead") or {}).get("name") or "the caller"
+    return HTMLResponse(f"<!doctype html><meta name=viewport content='width=device-width,initial-scale=1'><body style='font-family:system-ui;background:#07090e;color:#f9fafb;display:grid;place-items:center;min-height:100vh;margin:0'><div style='max-width:420px;padding:24px;text-align:center'><h2>Lead accepted</h2><p>{'Thanks. ' if first else 'Already accepted. '}You are on {who}'s lead. Please contact them now.</p><p><a style='color:#a5b4fc' href='/?call={cid}'>Open the call</a></p></div>")
+
+@app.get("/api/lead/{cid}/listen")
+def lead_listen(cid: str, t: str = ""):
+    from app import links
+    from fastapi.responses import RedirectResponse
+    if not links.ok(cid, "listen", t):
+        raise HTTPException(403, "This link is not valid")
+    return RedirectResponse(f"/?call={cid}")
+
+_ALERT = __import__("re").compile(r"complain|not acceptable|unacceptable|manager|senior|angry|ridiculous|waiting|no reply|nobody|worst|cancel|refund|fed up|frustrat", __import__("re").I)
+
+@app.get("/api/live")
+def live_calls():
+    """Calls in progress: browser-simulator sessions (with live lines and model latency) and Vaani calls (from webhook events)."""
+    now = config.now_ist()
+    out = []
+    for cid, d, upd in db.session_list():
+        try:
+            started = datetime.fromisoformat(d["started_at"])
+            if (now - datetime.fromisoformat(upd)).total_seconds() > 600:
+                continue
+        except Exception:
+            continue
+        tr = d.get("transcript") or []
+        said = " ".join(t["text"] for t in tr if t["who"] == "caller")
+        out.append({"id": cid, "source": "simulator", "who": d.get("caller_label") or "Simulated caller", "elapsed_s": round((now - started).total_seconds()),
+                    "turns": len(tr), "last": tr[-3:], "llm_ms": d.get("llm_ms"), "alert": bool(_ALERT.search(said)), "status": d.get("status")})
+    v, _ = db.kv_get("live_calls")
+    for room, d in (v or {}).items():
+        try:
+            started = datetime.fromisoformat(d["started_at"])
+        except Exception:
+            continue
+        if (now - started).total_seconds() > 1800:
+            continue
+        out.append({"id": room, "source": "vaani", "who": d.get("phone") or "Vaani caller", "elapsed_s": round((now - started).total_seconds()),
+                    "status": d.get("status"), "turns": None, "last": [], "llm_ms": None, "alert": False})
+    return {"calls": out}
+
 @app.post("/api/calls/{cid}/override")
 def override(cid: str, b: OverrideIn, request: Request):
     """Staff change a call's outcome. Moving a lead to qualified also sends the designer handoff email."""
@@ -193,7 +256,7 @@ def override(cid: str, b: OverrideIn, request: Request):
     c = _must(cid)
     if b.verdict not in ("qualified", "declined", "not_now", "escalate"):
         raise HTTPException(400, "Unknown outcome")
-    changes = {"override": {"verdict": b.verdict, "note": b.note, "original": c["verdict"], "at": _dt.now().isoformat(timespec="seconds")}}
+    changes = {"override": {"verdict": b.verdict, "note": b.note, "original": c["verdict"], "at": config.now_ist().isoformat(timespec="seconds")}}
     msg = "Outcome changed"
     if b.verdict == "qualified" and c["verdict"] != "qualified":
         text = "\n".join(f"{t['who'].upper()}: {t['text']}" for t in (c.get("transcript") or []))
@@ -239,7 +302,7 @@ def get_settings():
 def save_settings(b: SettingsIn):
     cur = stats.settings()
     cur.update({k: v for k, v in b.dict().items() if v is not None and v >= 0})
-    db.kv_set("settings", cur, datetime.now().isoformat(timespec="seconds"))
+    db.kv_set("settings", cur, config.now_ist().isoformat(timespec="seconds"))
     stats.invalidate()
     return cur
 
@@ -250,7 +313,7 @@ def get_stats():
 @app.get("/api/brief")
 def get_brief():
     v, ts = db.kv_get("brief")
-    return {"brief": v, "updated_at": ts, "today": bool(ts and ts[:10] == datetime.now().date().isoformat())}
+    return {"brief": v, "updated_at": ts, "today": bool(ts and ts[:10] == config.now_ist().date().isoformat())}
 
 @app.post("/api/brief")
 def make_brief():
@@ -266,7 +329,7 @@ def make_brief():
         "Headline: one sentence stating total calls, the qualified pipeline value in rupees (lakhs), how many were declined, and how many urgent escalations.\nWins:\n- two or three short bullets\nLost leads:\n- one to three short bullets on who was declined or missed and why\n"
         "Actions:\n- two or three concrete things the team should do today, such as call back a named complaint or follow up a lead.",
         [{"role": "user", "text": f"Stats: {slim}\n\nRecent call gists:\n{gists}"}], None, 0.3)
-    now = datetime.now().isoformat(timespec="seconds")
+    now = config.now_ist().isoformat(timespec="seconds")
     db.kv_set("brief", text, now)
     return {"brief": text, "updated_at": now, "today": True}
 
@@ -288,7 +351,8 @@ def search(b: SearchIn):
     for c in calls:
         lead = c.get("lead") or {}
         talk = " ".join(t["text"] for t in (c.get("transcript") or []) if t["who"] == "caller")[:500]
-        corpus.append(f"[{c['id']}] outcome={stats.eff_verdict(c)}; {stats.prop_type(lead)} in {stats.area_of(lead)}; {c['gist']} CALLER SAID: {talk}")
+        r = c.get("result") or {}
+        corpus.append(f"[{c['id']}] outcome={stats.eff_verdict(c)}; {stats.prop_type(lead)} in {stats.area_of(lead)}; size={lead.get('sqft') or 'unknown'} sq ft; timeline={lead.get('timeline') or 'not mentioned'}; budget={lead.get('budget_volunteered') or 'not mentioned'}; mood={r.get('mood') or 'unrated'}; price_asked={bool(r.get('price_asked'))}; {c['gist']} CALLER SAID: {talk}")
     schema = {"type": "OBJECT", "properties": {"matches": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
         "id": {"type": "STRING"}, "why": {"type": "STRING"}}, "required": ["id", "why"]}}}, "required": ["matches"]}
     out, _ = gemini.generate("You search a phone-call archive for an interior design studio. Return only calls that genuinely match the request, best first, "
@@ -352,7 +416,7 @@ def cron_weekly(request: Request):
     m.set_content("This week's report is attached: a PDF summary and a CSV of every call.")
     m.add_attachment(exports.pdf_bytes(), maintype="application", subtype="pdf", filename="aangan-report.pdf")
     m.add_attachment(exports.csv_bytes(), maintype="text", subtype="csv", filename="aangan-calls.csv")
-    r = integ._send(m, "weekly-report", datetime.now().strftime("%Y%m%d"), True)
+    r = integ._send(m, "weekly-report", config.now_ist().strftime("%Y%m%d"), True)
     return {"ok": True, "delivery": r.get("status")}
 
 

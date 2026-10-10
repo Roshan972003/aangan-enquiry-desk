@@ -59,6 +59,6 @@ def _final(history):
         "decline_reason": "mock rule" if v == "declined" else None,
         "uncertainties": [], "dont_reask": ["scope", "area"], "first_question_for_designer": "Confirm scope and timeline.",
         "needs_human_review": False, "language": "English",
-        "sentiment": "negative" if complaint else "positive", "sentiment_score": 22 if complaint else 78,
+        "sentiment": "negative" if complaint else "positive", "sentiment_score": 22 if complaint else 78, "mood": "frustrated" if complaint else "curious",
         "key_events": [{"turn": 1, "type": "price_question", "label": "Asked about price"}, {"turn": 3, "type": "email_confirmed", "label": "Email confirmed"}, {"turn": 5, "type": "booking_made", "label": "Slot booked"}],
     }

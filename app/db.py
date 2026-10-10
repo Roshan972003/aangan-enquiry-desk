@@ -126,10 +126,9 @@ def update_ops(cid, changes: dict):
 # Append-only log of staff actions. There is deliberately no update or delete function.
 def audit_add(call_id, action, detail, actor="dashboard"):
     import uuid
-    from datetime import datetime
     with conn() as c:
         _exec(c, "INSERT INTO audit (id, ts, call_id, actor, action, detail) VALUES (?,?,?,?,?,?)",
-              (uuid.uuid4().hex, datetime.now().isoformat(timespec="seconds"), call_id, (actor or "dashboard")[:60], action, json.dumps(detail)))
+              (uuid.uuid4().hex, config.now_ist().isoformat(timespec="seconds"), call_id, (actor or "dashboard")[:60], action, json.dumps(detail)))
 
 def audit_list(call_id=None, limit=50):
     with conn() as c:
@@ -147,3 +146,8 @@ def update_result(cid, result: dict):
         _exec(k, "UPDATE calls SET result=? WHERE id=?", (json.dumps(result), cid))
     from app import stats
     stats.invalidate()
+
+def session_list():
+    with conn() as c:
+        rows = _exec(c, "SELECT id, data, updated_at FROM sessions ORDER BY updated_at DESC LIMIT 20").fetchall()
+    return [(r["id"], json.loads(r["data"]), r["updated_at"]) for r in rows]

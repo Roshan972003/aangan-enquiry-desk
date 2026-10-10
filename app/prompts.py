@@ -70,7 +70,7 @@ Verdict rules from the rubric: two or more fails: declined. One fail on 1, 2 or 
 may come back, e.g. timeline too short now but possible later). Unclear on 4 or 5: still qualified, note it in uncertainties.
 A budget the caller volunteers that is clearly far below any project of that scope fails criterion 4.
 Existing-client complaints or requests for a senior person: verdict escalate. A missed or empty call: missed.
-Set sentiment_score from 0 (very unhappy) to 100 (very happy) for the caller's mood across the call. The transcript lines are numbered like [3]. In key_events list up to 8 important moments (price question, email confirmed, booking made, complaint, objection, the reason for a decline, a referral, an escalation), each with the line number as turn and a short label of a few words.
+Set mood to one word for the caller's overall state: calm (relaxed, straightforward), curious (asking many questions, exploring), hesitant (unsure, delaying, comparing) or frustrated (annoyed, let down). Set sentiment_score from 0 (very unhappy) to 100 (very happy) for the caller's mood across the call. The transcript lines are numbered like [3]. In key_events list up to 8 important moments (scope discussed, price question, email confirmed, booking made, complaint, objection, the reason for a decline, a referral, an escalation), each with the line number as turn and a short label of a few words.
 Set sentiment to negative when the caller sounded frustrated, angry or let down, otherwise neutral or positive.
 Never include any price or per-sq-ft figure that the studio might charge. Write the gist for a busy founder: 2 or 3 plain
 sentences saying who called, what they want, and what happens next."""
@@ -93,9 +93,10 @@ FINAL_SCHEMA = {
         "language": {"type": "STRING"},
         "sentiment": {"type": "STRING", "enum": ["positive", "neutral", "negative"]},
         "sentiment_score": {"type": "INTEGER"},
+        "mood": {"type": "STRING", "enum": ["calm", "curious", "hesitant", "frustrated"]},
         "key_events": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
             "turn": {"type": "INTEGER"},
-            "type": {"type": "STRING", "enum": ["price_question", "email_confirmed", "booking_made", "complaint", "objection", "decline_reason", "referral", "escalation"]},
+            "type": {"type": "STRING", "enum": ["scope_discussed", "price_question", "email_confirmed", "booking_made", "complaint", "objection", "decline_reason", "referral", "escalation"]},
             "label": {"type": "STRING"}}, "required": ["turn", "type", "label"]}},
     },
     "required": ["verdict", "criteria", "lead", "price_asked", "gist", "uncertainties", "dont_reask", "first_question_for_designer", "needs_human_review"],

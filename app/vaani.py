@@ -4,7 +4,7 @@ import re, secrets, time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from fastapi import APIRouter, HTTPException, Request
-from app import agent, config, db, integrations as integ, slots as slotmod
+from app import config, agent, config, db, integrations as integ, slots as slotmod
 
 router = APIRouter(prefix="/api/vaani")
 
@@ -57,7 +57,7 @@ def _pick(d: dict, *names, default=None):
 async def tool_availability(request: Request):
     """Vaani tool: check_availability. Returns the next free consultation slots from Cal.com."""
     _auth(request)
-    out = slotmod.available_slots(datetime.now(), 6)
+    out = slotmod.available_slots(config.now_ist(), 6)
     return {"slots": [{"id": s["id"], "label": s["label"], "start": s["start"]} for s in out],
             "say": "Offer the caller two of these. Use the start value exactly when booking."}
 
@@ -80,7 +80,7 @@ async def tool_book(request: Request):
         if "cannot receive mail" in msg or "400" in msg:
             return {"ok": False, "say": "That slot or email did not work. Ask the caller to repeat the email letter by letter, or offer another slot."}
         return {"ok": False, "say": "Booking failed. Tell the caller a designer will call them to confirm."}
-    db.kv_set("vaani_booking:" + str(email).lower(), {"slot": slot, "invite": res}, datetime.now().isoformat(timespec="seconds"))
+    db.kv_set("vaani_booking:" + str(email).lower(), {"slot": slot, "invite": res}, config.now_ist().isoformat(timespec="seconds"))
     return {"ok": True, "say": f"Booked for {slot['label']}. The caller will get an email with the calendar invite."}
 
 def _turns(raw: Any):
@@ -129,7 +129,20 @@ async def post_call(request: Request):
     """Vaani webhook. Only the call_postprocessing event carries the transcript, so the others are acknowledged and ignored."""
     b = await _body(request)
     event = b.get("event")
-    db.kv_set("webhook_last", {"event": event, "at": datetime.now().isoformat(timespec="seconds")}, datetime.now().isoformat(timespec="seconds"))
+    db.kv_set("webhook_last", {"event": event, "at": config.now_ist().isoformat(timespec="seconds")}, config.now_ist().isoformat(timespec="seconds"))
+    if event in ("call_started", "user_picked_up_at", "call_ended", "call_rejected", "call_no_answer", "call_failed"):
+        room = _pick(b, "room_name", "call_id") or _pick(b.get("data") if isinstance(b.get("data"), dict) else {}, "room_name", "call_id")
+        if room:
+            live, _ = db.kv_get("live_calls")
+            live = live or {}
+            if event == "call_started":
+                live[str(room)] = {"started_at": config.now_ist().isoformat(timespec="seconds"), "phone": _pick(b, "phone_number", "from_number"), "status": "connected"}
+            elif event == "user_picked_up_at" and str(room) in live:
+                live[str(room)]["status"] = "talking"
+            else:
+                live.pop(str(room), None)
+            db.kv_set("live_calls", live, config.now_ist().isoformat(timespec="seconds"))
+        return {"ok": True, "tracked": event}
     if event and event != "call_postprocessing":
         return {"ok": True, "ignored": event}
     data = b.get("data") if isinstance(b.get("data"), dict) else b
@@ -146,7 +159,7 @@ async def post_call(request: Request):
             end = end.astimezone(timezone(timedelta(hours=5, minutes=30))).replace(tzinfo=None)
         started = end - timedelta(seconds=duration_s)
     except (ValueError, TypeError):
-        started = datetime.now()
+        started = config.now_ist()
     phone = _pick(data, "from_number", "from", "caller", "phone_number", "phone", "customer_number")
     call_id = _pick(data, "call_id", "room_name", "id") or _pick(b, "call_id") or int(time.time())
     if not _has_secret(request):
@@ -156,6 +169,9 @@ async def post_call(request: Request):
         if real:
             transcript = _turns(real)   # trust Vaani's copy, not the posted one
     cid, verdict = _process(call_id, transcript, started, duration_s, phone)
+    live, _ = db.kv_get("live_calls")
+    if live and str(call_id) in live:
+        live.pop(str(call_id), None); db.kv_set("live_calls", live, config.now_ist().isoformat(timespec="seconds"))
     return {"ok": True, "call_id": cid, "verdict": verdict}
 
 VAANI_API = "https://api.vaanivoice.ai/api"
@@ -187,7 +203,7 @@ async def sync_from_vaani(request: Request, limit: int = 20):
             try:
                 started = datetime.fromisoformat(item["Start_time"])
             except (KeyError, ValueError):
-                started = datetime.now()
+                started = config.now_ist()
             dur = float(item.get("duration_ms") or 0)
             dur_s = dur / 1000.0 if dur > 600 else dur   # the API reports small values in seconds, larger in ms
             cid, verdict = _process(item["call_id"], _turns(text), started, max(5.0, dur_s) if dur_s else 120.0,

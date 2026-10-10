@@ -4,7 +4,7 @@ from app import config, db, gemini, guard, prompts, slots as slotmod, integratio
 
 def _save(sess):
     d = dict(sess); d["started_at"] = sess["started_at"].isoformat()
-    db.session_save(sess["id"], d, datetime.now().isoformat(timespec="seconds"))
+    db.session_save(sess["id"], d, config.now_ist().isoformat(timespec="seconds"))
 
 def load(cid):
     d = db.session_load(cid)
@@ -31,7 +31,9 @@ def _turn_system(sess):
             f"Lead so far: {sess['lead']}\nAvailable consultation slots (offer two at a time):\n{lines}")
 
 def _agent_turn(sess):
+    _t = time.time()
     out, usage = gemini.generate(_turn_system(sess), sess["history"], prompts.AGENT_SCHEMA, temperature=0.4)
+    sess["llm_ms"] = round((time.time() - _t) * 1000)
     for k in ("in", "out"):
         sess["usage"][k] += usage[k]
     caller_text = " ".join(h["text"] for h in sess["history"] if h["role"] == "user")
@@ -52,7 +54,7 @@ def _agent_turn(sess):
 
 def start_call(caller_label="Simulated caller", started_at=None, phone=None):
     t0 = time.time()
-    when = started_at or datetime.now()
+    when = started_at or config.now_ist()
     cid = "C" + uuid.uuid4().hex[:8].upper()
     sess = {"id": cid, "started_at": when, "t0": t0, "history": [], "transcript": [], "lead": {}, "usage": {"in": 0, "out": 0},
             "guard_blocks": 0, "price_asked": False, "slot_choice": 0, "status": "continue", "caller_label": caller_label,
@@ -99,7 +101,8 @@ def finalize(transcript, started_at, duration_s, source, caller_label, call_id=N
     chosen = None
     if verdict == "qualified":
         from app import stats as _st
-        chosen = _st.least_loaded(db.all_calls())
+        _lead = result.get("lead") or {}
+        chosen = _st.least_loaded(db.all_calls(), _st.area_of(_lead), _st.prop_type(_lead) == "Commercial")
         if slot:
             slot = dict(slot); slot.update({"designer": chosen["name"], "designer_email": chosen["email"]})
     if verdict in ("qualified",):

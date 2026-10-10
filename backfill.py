@@ -4,24 +4,26 @@ from app import db, gemini
 from app.agent import attach_event_times
 
 SCHEMA = {"type": "OBJECT", "properties": {
-    "sentiment": {"type": "STRING", "enum": ["positive", "neutral", "negative"]}, "sentiment_score": {"type": "INTEGER"},
+    "sentiment": {"type": "STRING", "enum": ["positive", "neutral", "negative"]}, "sentiment_score": {"type": "INTEGER"}, "mood": {"type": "STRING", "enum": ["calm", "curious", "hesitant", "frustrated"]},
     "key_events": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {"turn": {"type": "INTEGER"},
-        "type": {"type": "STRING", "enum": ["price_question", "email_confirmed", "booking_made", "complaint", "objection", "decline_reason", "referral", "escalation"]},
+        "type": {"type": "STRING", "enum": ["scope_discussed", "price_question", "email_confirmed", "booking_made", "complaint", "objection", "decline_reason", "referral", "escalation"]},
         "label": {"type": "STRING"}}, "required": ["turn", "type", "label"]}}},
-    "required": ["sentiment", "sentiment_score", "key_events"]}
+    "required": ["sentiment", "sentiment_score", "mood", "key_events"]}
 SYSTEM = ("You review a phone call to an interior design studio. Rate the caller's mood across the call from 0 (very unhappy) to 100 (very happy) and label it. "
-          "Lines are numbered like [3]. List up to 8 key moments (price question, email confirmed, booking made, complaint, objection, the reason for a decline, a referral, an escalation) "
+          "Lines are numbered like [3]. Also give mood: calm, curious, hesitant or frustrated. List up to 8 key moments (scope discussed, price question, email confirmed, booking made, complaint, objection, the reason for a decline, a referral, an escalation) "
           "with the line number as turn and a short label of a few words.")
 
+import sys
+FORCE = "--force" in sys.argv
 done = 0
 for c in db.all_calls():
     r = c.get("result") or {}
     tr = c.get("transcript") or []
-    if r.get("sentiment_score") is not None or not tr:
+    if (r.get("sentiment_score") is not None and r.get("mood") and not FORCE) or not tr:
         continue
     numbered = "\n".join(f"[{i}] {t['who'].upper()}: {t['text']}" for i, t in enumerate(tr))
     out, _ = gemini.generate(SYSTEM, [{"role": "user", "text": numbered}], SCHEMA, 0.1)
-    r["sentiment"], r["sentiment_score"] = out["sentiment"], out["sentiment_score"]
+    r["sentiment"], r["sentiment_score"], r["mood"] = out["sentiment"], out["sentiment_score"], out["mood"]
     r["key_events"] = attach_event_times(out.get("key_events"), tr, c["duration_s"] or 120)
     db.update_result(c["id"], r)
     done += 1

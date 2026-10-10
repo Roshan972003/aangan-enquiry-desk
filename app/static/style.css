@@ -149,3 +149,20 @@ a{color:#A5B4FC}[data-theme=light] a{color:var(--accent)}
 .wlrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px dashed var(--line);font-size:12.5px}.wlrow:last-child{border:0}
 .wlbar{height:6px;border-radius:4px;background:var(--surface2);margin-top:4px;overflow:hidden}.wlbar i{display:block;height:100%;background:var(--accent)}
 .searchbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.searchbar input{flex:1;min-width:220px;padding:12px 14px;font-size:15px;border-radius:12px}
+
+/* mood, in-flight calls, win chance */
+.mood{display:inline-block;font:600 10.5px var(--m);text-transform:capitalize;padding:1px 8px;border-radius:5px;border:1px solid currentColor}
+.m-calm{color:#10B981}.m-curious{color:#818CF8}.m-hesitant{color:#F59E0B}.m-frustrated{color:#F43F5E}
+.mmap{display:grid;grid-template-columns:repeat(auto-fill,22px);gap:5px;margin-top:10px}
+.mcell{width:22px;height:22px;border-radius:6px;border:0;padding:0;cursor:pointer;background:currentColor;opacity:.85}.mcell:hover{opacity:1;transform:scale(1.12)}
+.mcell.m-frustrated{box-shadow:0 0 10px rgba(244,63,94,.6)}
+.tag.win{color:var(--accent);border:1px solid var(--accent);background:var(--accent-soft)}
+.lv{border:1px solid var(--line);border-radius:10px;padding:9px 10px;margin-top:8px;display:flex;flex-direction:column;gap:6px}
+.lv.alert{border-color:var(--bad);box-shadow:var(--bad-glow);background:rgba(244,63,94,.08)}
+.lvh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.lvh .lvt{margin-left:auto;font-size:15px;font-weight:600}
+.lvl{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:2px}.lvl .who{font:600 10px var(--m)}
+.lvm{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:11.5px}
+.pulse{width:9px;height:9px;border-radius:50%;background:var(--bad);box-shadow:0 0 0 0 rgba(244,63,94,.6);animation:pulse 1.4s infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 9px rgba(244,63,94,0)}100%{box-shadow:0 0 0 0 rgba(244,63,94,0)}}
+@media(prefers-reduced-motion:reduce){.pulse{animation:none}}
+.mk-scope_discussed,.evt.scope_discussed{color:#60A5FA}

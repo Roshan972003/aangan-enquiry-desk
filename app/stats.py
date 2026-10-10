@@ -47,6 +47,38 @@ def area_of(lead):
             return a
     return loc.split(",")[0].strip().title() if loc.strip() else "Not given"
 
+def win_chance(c):
+    """Rules-based estimate of the chance a qualified lead becomes a project. Transparent factors, not a trained model."""
+    lead, r, ops = c.get("lead") or {}, c.get("result") or {}, c.get("ops") or {}
+    score, why = 25, ["base 25%"]
+    def add(pts, text):
+        nonlocal score
+        score += pts; why.append(("+" if pts >= 0 else "") + str(pts) + "% " + text)
+    if c.get("slot"): add(15, "consultation booked")
+    dm = str(lead.get("decision_maker") or "").lower()
+    if dm and any(w in dm for w in ("owner", "myself", "husband", "wife", "decision", "founder", "yes")): add(10, "decision-maker on the call")
+    if lead.get("referral"): add(10, "came by referral")
+    t = str(lead.get("timeline") or "").lower()
+    if t and not re.search(r"no rush|flexible|someday|not sure", t): add(8, "has a clear timeline")
+    elif re.search(r"no rush|flexible|someday", t): add(-5, "no urgency")
+    sq = lead.get("sqft") or 0
+    try:
+        sq = float(sq)
+    except (TypeError, ValueError):
+        sq = 0
+    if sq >= 1000: add(7, "larger home or office")
+    if lead.get("budget_volunteered"): add(8, "volunteered a budget")
+    sc = r.get("sentiment_score")
+    if sc is not None:
+        if sc >= 70: add(8, "positive mood")
+        elif sc < 40: add(-12, "unhappy mood")
+    if r.get("mood") == "hesitant": add(-8, "hesitant")
+    if r.get("uncertainties"): add(-4, "open questions")
+    stage = stage_of(c)
+    if stage == "site_visit": add(12, "site visit stage")
+    if stage == "closed_won": return 100, ["closed won"]
+    return max(5, min(95, score)), why
+
 def workload(calls):
     """Active leads per designer (qualified, assigned, not yet closed) with a light / balanced / heavy badge relative to the team average."""
     active = Counter()
@@ -68,11 +100,17 @@ def workload(calls):
         out.append({"name": n, "active": a, "level": level})
     return {"designers": out, "unassigned": unassigned, "average": round(avg, 1)}
 
-def least_loaded(calls):
-    """The designer with the fewest active leads. Ties go to the first on the list."""
-    wl = workload(calls)["designers"]
-    best = min(wl, key=lambda d: d["active"])
-    return next(d for d in config.DESIGNERS if d["name"] == best["name"])
+def least_loaded(calls, area=None, commercial=False):
+    """Pick a designer: prefer those who cover the lead's area (or commercial work), then the one with the fewest active leads."""
+    wl = {d["name"]: d["active"] for d in workload(calls)["designers"]}
+    pool = config.DESIGNERS
+    if area:
+        match = [d for d in pool if any(area.lower() == a.lower() for a in d.get("areas", []))]
+        pool = match or pool
+    if commercial:
+        match = [d for d in pool if d.get("commercial")]
+        pool = match or pool
+    return min(pool, key=lambda d: wl.get(d["name"], 0))
 
 def compute():
     """Cached for 60 s so dashboard views do not wake the database each time."""
@@ -136,14 +174,16 @@ def _compute():
     def lead_card(c):
         lead = c.get("lead") or {}
         ops = c.get("ops") or {}
-        return {"id": c["id"], "name": lead.get("name") or "Caller", "type": prop_type(lead), "area": area_of(lead), "sqft": lead.get("sqft"),
+        wc, why = win_chance(c)
+        ended = (datetime.fromisoformat(c["started_at"]) + timedelta(seconds=c["duration_s"] or 0)).isoformat()
+        return {"win": wc, "win_why": why, "ended_at": ended, "ended_ts": int((datetime.fromisoformat(ended) - timedelta(hours=5, minutes=30)).replace(tzinfo=__import__("datetime").timezone.utc).timestamp()), "first_touch": ops.get("first_touch"), "id": c["id"], "name": lead.get("name") or "Caller", "type": prop_type(lead), "area": area_of(lead), "sqft": lead.get("sqft"),
                 "timeline": lead.get("timeline"), "stage": stage_of(c), "emailed": bool(ops.get("emailed")), "assigned_to": ops.get("assigned_to"), "gist": c["gist"],
                 "slot": (c.get("slot") or {}).get("label"), "started_at": c["started_at"], "overridden": bool(ops.get("override"))}
     escal = [{"id": c["id"], "name": (c.get("lead") or {}).get("name") or c["caller_label"], "phone": c["caller_label"], "gist": c["gist"],
               "started_at": c["started_at"], "callback": ((c.get("ops") or {}).get("callback") or "pending")}
              for c in calls if ev[c["id"]] == "escalate"]
     # red flags: anything a human should look at now
-    now = datetime.now(); flags = []
+    now = config.now_ist(); flags = []
     for c in calls:
         e = ev[c["id"]]; ops = c.get("ops") or {}; when = datetime.fromisoformat(c["started_at"])
         who = (c.get("lead") or {}).get("name") or c["caller_label"]
@@ -171,6 +211,11 @@ def _compute():
     forecast = {"leads_per_day": round(per_day, 2), "days_left": left, "projected_qualified_month": round(proj_q, 1),
                 "projected_pipeline_lakh": round(proj_q * mid, 1), "projected_revenue_lakh": round(proj_q * mid * st["close_rate_pct"] / 100.0, 1),
                 "won_to_date": won_now, "basis": f"{q30} qualified leads in the last {span_days} days, at a {st['close_rate_pct']}% assumed close rate"}
+    wsum = sum(win_chance(c)[0] for c in q_calls if stage_of(c) != "closed_won") / 100.0
+    forecast["weighted_open_leads"] = round(wsum, 1)
+    forecast["weighted_revenue_lakh"] = round(wsum * mid, 1)
+    forecast["win_basis"] = "sum of each open lead's win chance x average project value"
+    moods = Counter((c.get("result") or {}).get("mood") for c in calls if (c.get("result") or {}).get("mood"))
     today_s = now.date().isoformat()
     td = [c for c in calls if c["started_at"][:10] == today_s]
     today = {"calls": len(td), "qualified": sum(1 for c in td if ev[c["id"]] == "qualified"), "declined": sum(1 for c in td if ev[c["id"]] in ("declined", "not_now")),
@@ -195,12 +240,14 @@ def _compute():
         "cost_total_inr": round(cost, 2), "cost_per_call_inr": round(cost / n, 2) if n else 0,
         "cost_per_qualified_inr": round(cost / q, 2) if q else None, "cost_components": {k: round(v, 2) for k, v in comp.items()},
         "voice_minutes": round(minutes, 1), "tokens_in": tok_in, "tokens_out": tok_out,
+        "closed_won": won_now, "closed_revenue_lakh": round(won_now * mid, 1), "roi_closed_x": round(won_now * mid * 1e5 / cost) if cost and won_now else None,
+        "cpql_inr": round(cost / q, 2) if q else None,
         "roi_pipeline_x": round(pipe_inr / cost) if cost else None, "roi_expected_x": round(expected_inr / cost) if cost else None,
         "time_saved_hours": round(saved_min / 60.0, 1), "settings": st,
         "days": [{"date": k, **v} for k, v in sorted(days.items())], "hours": hours,
         "types": types.most_common(8), "areas": areas.most_common(8),
         "kanban": {key: [lead_card(c) for c in q_calls if stage_of(c) == key] for key, _ in STAGES},
-        "stages": STAGES, "escalations": escal, "offhour": offhour, "workload": workload(calls), "red_flags": flags, "forecast": forecast, "today": today,
+        "stages": STAGES, "moods": dict(moods), "escalations": escal, "offhour": offhour, "workload": workload(calls), "red_flags": flags, "forecast": forecast, "today": today,
         "tokens_per_day": [{"date": k, "tokens": t} for k, t in sorted(tok_day.items())],
         "designers": [d["name"] for d in config.DESIGNERS],
         "gmail": bool(config.SMTP_HOST and config.SMTP_USER),
@@ -209,7 +256,7 @@ def _compute():
                     "overridden": ev[c["id"]] != c["verdict"], "gist": c["gist"], "answer_s": c["ring_to_answer_s"],
                     "cost_inr": c["cost_inr"], "in_hours": c["in_hours"], "source": c["source"],
                     "price_asked": bool((c.get("result") or {}).get("price_asked")),
-                    "sentiment": (c.get("result") or {}).get("sentiment"), "sentiment_score": (c.get("result") or {}).get("sentiment_score"),
+                    "mood": (c.get("result") or {}).get("mood"), "sentiment": (c.get("result") or {}).get("sentiment"), "sentiment_score": (c.get("result") or {}).get("sentiment_score"),
                     "hubspot": (c["integrations"] or {}).get("hubspot", {}).get("mode"),
                     "designer_email": (c["integrations"] or {}).get("designer_email", {}).get("mode"),
                     "invite": (c["integrations"] or {}).get("client_invite", {}).get("mode")} for c in calls[:60]],

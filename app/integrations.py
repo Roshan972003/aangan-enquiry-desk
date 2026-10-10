@@ -5,6 +5,7 @@ from datetime import datetime
 import httpx
 from app import config
 from app.ics import build_invite
+from app import links
 
 def _outbox(kind, name, content):
     try:
@@ -35,8 +36,8 @@ def hubspot_sync(call_id, lead, result, call_meta, live=True):
     payload = {"contact": props, "deal": {"dealname": f"{lead.get('name') or 'Caller'} - {lead.get('location') or 'Pune'} - {lead.get('scope') or 'enquiry'}",
                                           "pipeline": "default", "dealstage": "appointmentscheduled" if call_meta.get("slot") else "qualifiedtobuy"},
                "note": note, "meeting_slot": call_meta.get("slot")}
-    if not (live and config.HUBSPOT_TOKEN):
-        return {"mode": "outbox", "status": "saved locally, HubSpot token not set", "file": _outbox("hubspot", f"{call_id}.json", payload)}
+    if not (live and config.LIVE_INTEGRATIONS and config.HUBSPOT_TOKEN):
+        return {"mode": "outbox", "status": "saved locally, HubSpot not live here", "file": _outbox("hubspot", f"{call_id}.json", payload)}
     h = {"Authorization": f"Bearer {config.HUBSPOT_TOKEN}", "Content-Type": "application/json"}
     try:
         with httpx.Client(timeout=20, headers=h) as c:
@@ -63,8 +64,8 @@ def hubspot_sync(call_id, lead, result, call_meta, live=True):
 # ---------------- Email + invite ----------------
 def _send(msg: EmailMessage, kind, call_id, live=True):
     fname = f"{call_id}-{kind}.eml"
-    if not (live and config.SMTP_HOST):
-        return {"mode": "outbox", "status": "saved locally, SMTP not set", "file": _outbox("email", fname, msg.as_string())}
+    if not (live and config.LIVE_INTEGRATIONS and config.SMTP_HOST):
+        return {"mode": "outbox", "status": "saved locally, email not live here", "file": _outbox("email", fname, msg.as_string())}
     try:
         with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=20) as s:
             s.starttls(); 
@@ -80,7 +81,7 @@ def designer_email(call_id, lead, result, slot, transcript_text, live=True):
     if str(to).endswith("@example.com"):   # placeholder designer address: send to the studio head until real ones are set in designers.json
         to = config.STUDIO_HEAD_EMAIL
     subj = f"Qualified: {lead.get('scope') or 'enquiry'} in {lead.get('location') or 'Pune'}, {int(lead['sqft']) if lead.get('sqft') else '?'} sq ft"
-    body = (f"GIST\n{result['gist']}\n\n"
+    body = (f"ACCEPT THIS LEAD (one click): {links.url(call_id, 'accept')}\nLISTEN TO THE CALL / OPEN IN DASHBOARD: {links.url(call_id, 'listen')}\n\nGIST\n{result['gist']}\n\n"
             f"WHO: {lead.get('name')} ({lead.get('decision_maker') or 'decision-maker not confirmed'})\n"
             f"WANTS: {lead.get('scope')}\nWHERE: {lead.get('location')}   SIZE: {lead.get('sqft')} sq ft\nTIMELINE: {lead.get('timeline')}\n"
             f"BUDGET: {lead.get('budget_volunteered') or 'not mentioned'}   REFERRAL: {lead.get('referral') or '-'}\n"
@@ -110,7 +111,7 @@ def cal_book(call_id, lead, slot, result):
 def client_invite(call_id, lead, slot, live=True, result=None):
     if not (lead.get("email") and slot):
         return {"mode": "skipped", "status": "no client email or no slot, nothing to invite"}
-    if live and slot.get("source") == "cal" and config.env("CAL_API_KEY"):
+    if live and config.LIVE_INTEGRATIONS and slot.get("source") == "cal" and config.env("CAL_API_KEY"):
         try:
             return cal_book(call_id, lead, slot, result or {})
         except Exception as e:
@@ -148,7 +149,7 @@ def decline_email(call_id, lead, live=True):
 
 def hubspot_move_stage(deal_id, stage_key):
     """Keep the HubSpot deal stage in step with the dashboard board. Best effort."""
-    if not (deal_id and config.HUBSPOT_TOKEN):
+    if not (deal_id and config.HUBSPOT_TOKEN and config.LIVE_INTEGRATIONS):
         return "no HubSpot deal"
     want = {"qualified": "Initial Consultation", "consultation_booked": "Initial Consultation", "site_visit": "Initial Consultation", "closed_won": "Closed Won"}[stage_key]
     h = {"Authorization": f"Bearer {config.HUBSPOT_TOKEN}", "Content-Type": "application/json"}

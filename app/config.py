@@ -1,4 +1,5 @@
 import os, json
+from datetime import datetime, timedelta
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -33,3 +34,13 @@ AVG_PROJECT_LAKH = 11            # midpoint of the Rs 8-14 lakh average in the b
 
 # Assumptions behind the ROI and time-saved numbers. Editable on the dashboard and stored in the database.
 DEFAULT_SETTINGS = {"close_rate_pct": 10, "minutes_saved_per_call": 6, "project_low_lakh": 8, "project_high_lakh": 14, "offhour_loss_pct": 48}
+
+PUBLIC_URL = env("PUBLIC_URL", "https://aangan-enquiry-desk.vercel.app")
+
+
+def now_ist():
+    """Current time in India as a naive datetime. Vercel servers run in UTC, so datetime.now() would be 5.5 hours off."""
+    return datetime.utcnow() + timedelta(hours=5, minutes=30)
+
+# Safety switch. Local test runs set LIVE_INTEGRATIONS=0 in .env so they can never create real HubSpot records, bookings or emails.
+LIVE_INTEGRATIONS = env("LIVE_INTEGRATIONS", "1") == "1" and not MOCK_LLM
