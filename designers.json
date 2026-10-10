@@ -1,5 +1,7 @@
 [
-  {"name": "Designer A (placeholder)", "email": "designer-a@example.com", "commercial": false},
-  {"name": "Designer B (placeholder)", "email": "designer-b@example.com", "commercial": false},
-  {"name": "Designer C (placeholder)", "email": "designer-c@example.com", "commercial": true}
+  {"name": "Aditi Deshmukh", "title": "Principal Designer", "email": "aditi@example.com", "commercial": true, "areas": ["Koregaon Park", "Kalyani Nagar", "Baner"]},
+  {"name": "Rohan Kulkarni", "title": "Senior Interior Designer", "email": "rohan@example.com", "commercial": false, "areas": ["Baner", "Aundh", "Pimple Saudagar"]},
+  {"name": "Meera Joshi", "title": "Interior Designer", "email": "meera@example.com", "commercial": false, "areas": ["Magarpatta", "Hadapsar", "Undri"]},
+  {"name": "Kabir Shah", "title": "Commercial Design Lead", "email": "kabir@example.com", "commercial": true, "areas": []},
+  {"name": "Sneha Patil", "title": "Junior Designer", "email": "sneha@example.com", "commercial": false, "areas": []}
 ]

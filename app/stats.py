@@ -92,12 +92,13 @@ def workload(calls):
         else:
             unassigned += 1
     names = [d["name"] for d in config.DESIGNERS]
+    titles = {d["name"]: d.get("title", "") for d in config.DESIGNERS}
     avg = sum(active[n] for n in names) / max(1, len(names))
     out = []
     for n in names:
         a = active[n]
         level = "light" if a == 0 or a < avg * 0.7 else "heavy" if (a >= 3 and a > avg * 1.3) else "balanced"
-        out.append({"name": n, "active": a, "level": level})
+        out.append({"name": n, "title": titles.get(n, ""), "active": a, "level": level})
     return {"designers": out, "unassigned": unassigned, "average": round(avg, 1)}
 
 def least_loaded(calls, area=None, commercial=False):
